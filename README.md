@@ -19,6 +19,7 @@ Modern incident response teams are overloaded with alerts, brittle runbooks, and
 Milestone 1 focuses on the professional scaffold only. It does not implement database models, RAG, agent logic, tool execution, or the security harness yet.
 Milestone 2 adds the backend database session layer, SQLModel tables, and development-only table creation utilities. It still does not implement RAG, agents, tool registry, safety orchestration, evaluation workflows, or frontend dashboard behavior.
 Milestone 4 adds deterministic local document ingestion, chunking, prompt-injection flagging, and lexical retrieval without external embeddings or paid APIs.
+Milestone 5 adds a typed, allowlisted, audited safe tool registry with deterministic mock/read-only tools and blocked dangerous actions.
 
 ## Local Setup
 
@@ -179,6 +180,87 @@ Retrieval results include provenance and lightweight guardrails:
 - `score` and `citation`
 - `is_suspicious`, `matched_patterns`, and `risk_level`
 
+## Safe Tool Registry
+
+The tool registry is local-first, allowlisted, typed, and auditable.
+It exposes deterministic mock/read-only tools only, and it never performs arbitrary shell execution.
+
+Available safe tools:
+
+- `search_logs`
+- `get_node_metrics`
+- `get_running_jobs`
+- `check_network_connections`
+- `query_past_incidents`
+- `retrieve_runbook`
+- `create_ticket_draft`
+
+Blocked dangerous tools:
+
+- `cancel_job`
+- `drain_node`
+- `block_user`
+- `isolate_node`
+- `disable_service`
+
+List the registry definitions:
+
+```bash
+curl http://localhost:8000/api/v1/tools
+```
+
+Execute a safe mock tool:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools/search_logs/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "query": "xmrig mining pool",
+      "limit": 5
+    },
+    "agent_run_id": null
+  }'
+```
+
+Execute a runbook retrieval tool call with trusted-only default behavior:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools/retrieve_runbook/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "query": "gpu suspicious process xmrig",
+      "limit": 5,
+      "include_untrusted": false
+    },
+    "agent_run_id": null
+  }'
+```
+
+Attempt a blocked dangerous action:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools/drain_node/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "node": "gpu-node-14",
+      "reason": "suspicious outbound mining traffic"
+    },
+    "agent_run_id": null
+  }'
+```
+
+Registry behavior:
+
+- tools are allowlisted and validated with Pydantic input/output schemas
+- safe tool responses are deterministic and mock/demo-data based
+- tool executions can be audited to `tool_calls` when an `agent_run_id` is provided
+- dangerous tools never execute and return a blocked response that requires human approval
+- `retrieve_runbook` excludes untrusted documents by default, and returned chunks keep trust and suspicion metadata
+- no arbitrary shell execution, subprocess, Slurm, Docker, or destructive infrastructure commands are used in this milestone
+
 Frontend:
 
 ```bash
@@ -240,7 +322,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 4 local-first RAG foundation`
+`Milestone 5 safe MCP-style tool registry`
 
 Implemented in this milestone:
 
@@ -249,3 +331,4 @@ Implemented in this milestone:
 - `GET /api/v1/db/health` plus development-only `POST /api/v1/db/create-tables`
 - static demo seed service, `POST /api/v1/demo/seed`, and backend tests covering model registration, database routes, and demo seeding
 - deterministic document ingestion, chunking, prompt-injection flagging, and lexical chunk retrieval via `/api/v1/documents` and `/api/v1/rag/retrieve`
+- typed, allowlisted, audited mock tool registry via `/api/v1/tools` with blocked dangerous-action definitions and database-backed tool-call auditing

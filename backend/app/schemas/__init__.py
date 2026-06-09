@@ -21,7 +21,13 @@ from app.schemas.rag import (
 )
 from app.schemas.safety import SafetyEventRead
 from app.schemas.ticket import TicketDraftRead
-from app.schemas.tools import ToolCallRead
+from app.schemas.tools import (
+    ToolCallRead,
+    ToolExecuteRequest,
+    ToolExecuteResponse,
+    ToolListItem,
+    ToolListResponse,
+)
 
 __all__ = [
     "AgentRunRead",
@@ -52,4 +58,8 @@ __all__ = [
     "SelfAssessmentRead",
     "TicketDraftRead",
     "ToolCallRead",
+    "ToolExecuteRequest",
+    "ToolExecuteResponse",
+    "ToolListItem",
+    "ToolListResponse",
 ]
