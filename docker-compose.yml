@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: opsguard-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opsguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsguard}
+      POSTGRES_DB: ${POSTGRES_DB:-opsguard_ai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-opsguard} -d ${POSTGRES_DB:-opsguard_ai}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.6
+    container_name: opsguard-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  backend:
+    build:
+      context: ./backend
+    container_name: opsguard-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-opsguard}:${POSTGRES_PASSWORD:-opsguard}@postgres:5432/${POSTGRES_DB:-opsguard_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-opsguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsguard}
+      POSTGRES_DB: ${POSTGRES_DB:-opsguard_ai}
+      QDRANT_URL: http://qdrant:6333
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MOCK_LLM: ${MOCK_LLM:-true}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: opsguard-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  qdrant_data:
