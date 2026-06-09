@@ -4,6 +4,7 @@ from app.schemas.agent import AgentRunRead, AgentStepRead
 from app.schemas.alert import AlertRead, IncidentRead
 from app.schemas.assessment import SelfAssessmentRead
 from app.schemas.db import CreateTablesResponse, DatabaseHealthResponse
+from app.schemas.demo import DemoSeedRequest, DemoSeedResponse, DemoSeedSummary
 from app.schemas.document import DocumentChunkRead, DocumentRead
 from app.schemas.evaluation import EvaluationScoreRead
 from app.schemas.feedback import HumanFeedbackRead
@@ -20,6 +21,9 @@ __all__ = [
     "AlertRead",
     "CreateTablesResponse",
     "DatabaseHealthResponse",
+    "DemoSeedRequest",
+    "DemoSeedResponse",
+    "DemoSeedSummary",
     "DependencyHealth",
     "DocumentChunkRead",
     "DocumentRead",

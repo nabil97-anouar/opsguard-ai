@@ -68,6 +68,48 @@ Or use the development-only API route after the backend is running:
 curl -X POST http://localhost:8000/api/v1/db/create-tables
 ```
 
+## Demo Data
+
+Seed the static demo dataset through the API:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/demo/seed \
+  -H "Content-Type: application/json" \
+  -d '{"reset": false}'
+```
+
+Recreate only the demo-seeded records:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/demo/seed \
+  -H "Content-Type: application/json" \
+  -d '{"reset": true}'
+```
+
+Seed locally through the CLI:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m app.services.demo_seed
+```
+
+Reset and reseed through the CLI:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m app.services.demo_seed --reset
+```
+
+Included scenarios:
+
+- suspicious GPU usage with possible crypto-mining and outbound pool traffic
+- SSH brute-force activity against a login node
+- storage inode pressure on shared scratch space
+- RAG prompt-injection poisoning through an untrusted runbook
+- agent traces, safety events, kill-chain mappings, ticket drafts, and harness examples tied to those incidents
+
 Frontend:
 
 ```bash
@@ -136,4 +178,4 @@ Implemented in this milestone:
 - backend FastAPI skeleton with CORS, structured logging, and `GET /api/v1/health`
 - SQLModel session utilities, modular table models, and schema exports for the core backend entities
 - `GET /api/v1/db/health` plus development-only `POST /api/v1/db/create-tables`
-- backend tests covering model registration and database routes
+- static demo seed service, `POST /api/v1/demo/seed`, and backend tests covering model registration, database routes, and demo seeding
