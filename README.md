@@ -18,6 +18,7 @@ Modern incident response teams are overloaded with alerts, brittle runbooks, and
 
 Milestone 1 focuses on the professional scaffold only. It does not implement database models, RAG, agent logic, tool execution, or the security harness yet.
 Milestone 2 adds the backend database session layer, SQLModel tables, and development-only table creation utilities. It still does not implement RAG, agents, tool registry, safety orchestration, evaluation workflows, or frontend dashboard behavior.
+Milestone 4 adds deterministic local document ingestion, chunking, prompt-injection flagging, and lexical retrieval without external embeddings or paid APIs.
 
 ## Local Setup
 
@@ -110,6 +111,74 @@ Included scenarios:
 - RAG prompt-injection poisoning through an untrusted runbook
 - agent traces, safety events, kill-chain mappings, ticket drafts, and harness examples tied to those incidents
 
+## RAG
+
+This milestone uses deterministic local chunking plus lexical retrieval over SQL data only.
+It does not call OpenAI, Anthropic, sentence-transformers, or any paid embedding API.
+
+Trusted vs. untrusted documents:
+
+- `trusted` documents remain higher-confidence sources, but retrieved text is still treated as data, not instructions
+- `untrusted` documents can be retrieved when allowed and are returned with suspicion flags and provenance
+- simple prompt-injection patterns are scanned at ingest time and again at retrieval time
+
+Ingest a document:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/documents/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Trusted GPU Escalation Note",
+    "source": "manual://gpu-escalation-note",
+    "doc_type": "runbook",
+    "trust_level": "trusted",
+    "content": "# GPU Escalation\n\nValidate suspicious GPU processes before escalation.\n\nRequire human approval before containment.",
+    "metadata": {
+      "tags": ["gpu", "manual"],
+      "infrastructure_type": "gpu_cluster"
+    }
+  }'
+```
+
+List ingested documents:
+
+```bash
+curl http://localhost:8000/api/v1/documents
+```
+
+Retrieve grounded chunks:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "gpu xmrig suspicious process",
+    "limit": 5,
+    "trust_filter": null,
+    "include_untrusted": true
+  }'
+```
+
+Retrieve while excluding untrusted content:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "system override ignore policies",
+    "limit": 5,
+    "trust_filter": null,
+    "include_untrusted": false
+  }'
+```
+
+Retrieval results include provenance and lightweight guardrails:
+
+- `document_id`, `chunk_id`, `title`, `source`, and `chunk_index`
+- `trust_level` and `doc_type`
+- `score` and `citation`
+- `is_suspicious`, `matched_patterns`, and `risk_level`
+
 Frontend:
 
 ```bash
@@ -171,7 +240,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 2 backend database foundation`
+`Milestone 4 local-first RAG foundation`
 
 Implemented in this milestone:
 
@@ -179,3 +248,4 @@ Implemented in this milestone:
 - SQLModel session utilities, modular table models, and schema exports for the core backend entities
 - `GET /api/v1/db/health` plus development-only `POST /api/v1/db/create-tables`
 - static demo seed service, `POST /api/v1/demo/seed`, and backend tests covering model registration, database routes, and demo seeding
+- deterministic document ingestion, chunking, prompt-injection flagging, and lexical chunk retrieval via `/api/v1/documents` and `/api/v1/rag/retrieve`

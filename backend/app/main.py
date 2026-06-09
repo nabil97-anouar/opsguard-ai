@@ -8,7 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.db import router as db_router
 from app.api.routes.demo import router as demo_router
+from app.api.routes.documents import router as documents_router
 from app.api.routes.health import router as health_router
+from app.api.routes.rag import router as rag_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.security import get_default_security_headers
@@ -61,6 +63,8 @@ def create_application() -> FastAPI:
     application.include_router(health_router, prefix=settings.api_v1_prefix)
     application.include_router(db_router, prefix=settings.api_v1_prefix)
     application.include_router(demo_router, prefix=settings.api_v1_prefix)
+    application.include_router(documents_router, prefix=settings.api_v1_prefix)
+    application.include_router(rag_router, prefix=settings.api_v1_prefix)
     return application
 
 

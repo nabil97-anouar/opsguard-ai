@@ -11,6 +11,14 @@ from app.schemas.feedback import HumanFeedbackRead
 from app.schemas.harness import SecurityHarnessResultRead, SecurityHarnessTestRead
 from app.schemas.health import DependencyHealth, HealthResponse
 from app.schemas.kill_chain import KillChainMappingRead
+from app.schemas.rag import (
+    DocumentIngestRequest,
+    DocumentIngestResponse,
+    DocumentListItem,
+    RagRetrieveRequest,
+    RagRetrieveResponse,
+    RetrievalChunk,
+)
 from app.schemas.safety import SafetyEventRead
 from app.schemas.ticket import TicketDraftRead
 from app.schemas.tools import ToolCallRead
@@ -26,12 +34,18 @@ __all__ = [
     "DemoSeedSummary",
     "DependencyHealth",
     "DocumentChunkRead",
+    "DocumentIngestRequest",
+    "DocumentIngestResponse",
+    "DocumentListItem",
     "DocumentRead",
     "EvaluationScoreRead",
     "HealthResponse",
     "HumanFeedbackRead",
     "IncidentRead",
     "KillChainMappingRead",
+    "RagRetrieveRequest",
+    "RagRetrieveResponse",
+    "RetrievalChunk",
     "SafetyEventRead",
     "SecurityHarnessResultRead",
     "SecurityHarnessTestRead",
