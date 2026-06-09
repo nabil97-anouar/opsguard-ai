@@ -17,6 +17,7 @@ Modern incident response teams are overloaded with alerts, brittle runbooks, and
 - `docker-compose.yml`: local stack for PostgreSQL, Qdrant, backend, and frontend
 
 Milestone 1 focuses on the professional scaffold only. It does not implement database models, RAG, agent logic, tool execution, or the security harness yet.
+Milestone 2 adds the backend database session layer, SQLModel tables, and development-only table creation utilities. It still does not implement RAG, agents, tool registry, safety orchestration, evaluation workflows, or frontend dashboard behavior.
 
 ## Local Setup
 
@@ -44,6 +45,29 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+Create the database tables locally:
+
+```bash
+docker compose up -d postgres
+cd backend
+source .venv/bin/activate
+python -m app.db.init_db
+```
+
+Use a SQLite fallback for quick local testing without PostgreSQL:
+
+```bash
+cd backend
+source .venv/bin/activate
+DATABASE_URL=sqlite:///./opsguard.db python -m app.db.init_db
+```
+
+Or use the development-only API route after the backend is running:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/db/create-tables
+```
+
 Frontend:
 
 ```bash
@@ -60,6 +84,16 @@ Backend:
 cd backend
 source .venv/bin/activate
 pytest tests/ -v
+```
+
+Quick backend validation:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -c "from app.models import *; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables.keys()))"
+python -c "from app.db.session import engine; print('engine ok')"
+python -c "from app.main import app; print('app ok')"
 ```
 
 ## Docker Compose
@@ -95,11 +129,11 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 1 scaffold`
+`Milestone 2 backend database foundation`
 
 Implemented in this milestone:
 
 - backend FastAPI skeleton with CORS, structured logging, and `GET /api/v1/health`
-- frontend Next.js skeleton with a polished landing page and dashboard placeholder
-- Docker Compose stack for PostgreSQL, Qdrant, backend, and frontend
-- environment template, demo data placeholders, and clean repo structure for future milestones
+- SQLModel session utilities, modular table models, and schema exports for the core backend entities
+- `GET /api/v1/db/health` plus development-only `POST /api/v1/db/create-tables`
+- backend tests covering model registration and database routes
