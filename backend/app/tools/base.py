@@ -20,6 +20,7 @@ class UnknownToolError(LookupError):
 @dataclass(frozen=True)
 class ToolExecutionContext:
     agent_run_id: UUID | None = None
+    step_id: UUID | None = None
     invocation_source: str = "api"
 
 

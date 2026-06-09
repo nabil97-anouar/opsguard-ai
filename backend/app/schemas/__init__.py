@@ -1,6 +1,17 @@
 """API schemas for database-backed resources and system responses."""
 
-from app.schemas.agent import AgentRunRead, AgentStepRead
+from app.schemas.agent_run import (
+    AgentAssessmentResponse,
+    AgentRunCreateRequest,
+    AgentRunDetailResponse,
+    AgentRunListItem,
+    AgentRunListResponse,
+    AgentRunRead,
+    AgentRunResponse,
+    AgentStepRead,
+    AgentStepResponse,
+    FinalRecommendationResponse,
+)
 from app.schemas.alert import AlertRead, IncidentRead
 from app.schemas.assessment import SelfAssessmentRead
 from app.schemas.db import CreateTablesResponse, DatabaseHealthResponse
@@ -31,7 +42,14 @@ from app.schemas.tools import (
 
 __all__ = [
     "AgentRunRead",
+    "AgentRunCreateRequest",
+    "AgentRunDetailResponse",
+    "AgentRunListItem",
+    "AgentRunListResponse",
+    "AgentRunResponse",
+    "AgentAssessmentResponse",
     "AgentStepRead",
+    "AgentStepResponse",
     "AlertRead",
     "CreateTablesResponse",
     "DatabaseHealthResponse",
@@ -49,6 +67,7 @@ __all__ = [
     "HumanFeedbackRead",
     "IncidentRead",
     "KillChainMappingRead",
+    "FinalRecommendationResponse",
     "RagRetrieveRequest",
     "RagRetrieveResponse",
     "RetrievalChunk",

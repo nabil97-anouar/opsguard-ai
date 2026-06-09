@@ -284,6 +284,7 @@ def execute_tool(
             record_tool_call(
                 session,
                 agent_run_id=context.agent_run_id,
+                step_id=context.step_id,
                 tool_name=definition.name,
                 input_args=input_payload,
                 output=blocked_output,
@@ -315,6 +316,7 @@ def execute_tool(
         record_tool_call(
             session,
             agent_run_id=context.agent_run_id,
+            step_id=context.step_id,
             tool_name=definition.name,
             input_args=input_payload,
             output=output_payload,
@@ -344,6 +346,7 @@ def execute_tool(
             record_tool_call(
                 session,
                 agent_run_id=context.agent_run_id,
+                step_id=context.step_id,
                 tool_name=definition.name,
                 input_args=input_payload,
                 output={"error": error_message},

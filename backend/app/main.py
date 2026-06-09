@@ -6,6 +6,7 @@ from typing import AsyncIterator, Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.agent import router as agent_router
 from app.api.routes.db import router as db_router
 from app.api.routes.demo import router as demo_router
 from app.api.routes.documents import router as documents_router
@@ -64,6 +65,7 @@ def create_application() -> FastAPI:
     application.include_router(health_router, prefix=settings.api_v1_prefix)
     application.include_router(db_router, prefix=settings.api_v1_prefix)
     application.include_router(demo_router, prefix=settings.api_v1_prefix)
+    application.include_router(agent_router, prefix=settings.api_v1_prefix)
     application.include_router(documents_router, prefix=settings.api_v1_prefix)
     application.include_router(rag_router, prefix=settings.api_v1_prefix)
     application.include_router(tools_router, prefix=settings.api_v1_prefix)

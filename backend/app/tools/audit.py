@@ -76,6 +76,7 @@ def record_tool_call(
     session: Session,
     *,
     agent_run_id: UUID | None,
+    step_id: UUID | None = None,
     tool_name: str,
     input_args: dict[str, Any],
     output: Any,
@@ -87,11 +88,11 @@ def record_tool_call(
     if agent_run_id is None:
         return None
 
-    step_id = _resolve_step_id(session, agent_run_id)
+    resolved_step_id = step_id or _resolve_step_id(session, agent_run_id)
     scan_result = scan_tool_output(output)
     tool_call = ToolCall(
         agent_run_id=agent_run_id,
-        step_id=step_id,
+        step_id=resolved_step_id,
         tool_name=tool_name,
         input_args=input_args,
         output=output,

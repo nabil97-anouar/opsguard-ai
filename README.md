@@ -20,6 +20,7 @@ Milestone 1 focuses on the professional scaffold only. It does not implement dat
 Milestone 2 adds the backend database session layer, SQLModel tables, and development-only table creation utilities. It still does not implement RAG, agents, tool registry, safety orchestration, evaluation workflows, or frontend dashboard behavior.
 Milestone 4 adds deterministic local document ingestion, chunking, prompt-injection flagging, and lexical retrieval without external embeddings or paid APIs.
 Milestone 5 adds a typed, allowlisted, audited safe tool registry with deterministic mock/read-only tools and blocked dangerous actions.
+Milestone 6 adds a deterministic backend agent workflow with a local mock LLM, fixed graph nodes, metacognitive self-assessment, RAG evidence retrieval, and safe-tool execution that always ends in human review.
 
 ## Local Setup
 
@@ -261,6 +262,64 @@ Registry behavior:
 - `retrieve_runbook` excludes untrusted documents by default, and returned chunks keep trust and suspicion metadata
 - no arbitrary shell execution, subprocess, Slurm, Docker, or destructive infrastructure commands are used in this milestone
 
+## Agent Workflow
+
+The agent workflow is deterministic and local.
+It does not call OpenAI, Anthropic, LangGraph, LangChain, or any external infrastructure API.
+
+What it does:
+
+- creates an `AgentRun` from an existing alert
+- executes a fixed graph of nodes: ingest, classify, retrieve, plan, execute safe tools, synthesize, self-assess, recommend, and wait for human approval
+- uses Milestone 4 retrieval for grounded citations
+- uses Milestone 5 allowlisted tools for mock read-only evidence gathering
+- persists `AgentRun`, `AgentStep`, `SelfAssessment`, `ToolCall`, `SafetyEvent`, and `TicketDraft` records as appropriate
+- never executes dangerous infrastructure actions directly
+
+How it reasons:
+
+- the mock LLM is deterministic and rule-based
+- suspicious or untrusted retrieved/tool content lowers confidence and is called out in the final recommendation
+- missing evidence is preserved explicitly in self-assessment and recommendation output
+- all runs stop at `waiting_for_human`; this is not autonomous infrastructure control
+
+Seed demo data before running the agent:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/demo/seed \
+  -H "Content-Type: application/json" \
+  -d '{"reset": false}'
+```
+
+Run the workflow for a seeded alert:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
+  }'
+```
+
+Get full run details:
+
+```bash
+curl http://localhost:8000/api/v1/agent/runs/<agent_run_id>
+```
+
+List recent runs:
+
+```bash
+curl http://localhost:8000/api/v1/agent/runs
+```
+
+Workflow behavior:
+
+- prompt-injection and other suspicious content are surfaced in `notes`, citations, and safety events
+- dangerous actions such as `cancel_job` or `isolate_node` appear only as blocked recommendations requiring human approval
+- final recommendations can create internal ticket drafts, but they never call external ticketing systems
+- the workflow is designed for deterministic demos and tests, not for autonomous remediation
+
 Frontend:
 
 ```bash
@@ -322,7 +381,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 5 safe MCP-style tool registry`
+`Milestone 6 deterministic agent workflow`
 
 Implemented in this milestone:
 
@@ -332,3 +391,4 @@ Implemented in this milestone:
 - static demo seed service, `POST /api/v1/demo/seed`, and backend tests covering model registration, database routes, and demo seeding
 - deterministic document ingestion, chunking, prompt-injection flagging, and lexical chunk retrieval via `/api/v1/documents` and `/api/v1/rag/retrieve`
 - typed, allowlisted, audited mock tool registry via `/api/v1/tools` with blocked dangerous-action definitions and database-backed tool-call auditing
+- deterministic agent workflow via `/api/v1/agent/runs` with fixed nodes, mock reasoning, self-assessment, grounded citations, safe tool execution, ticket-draft creation, and mandatory human-review handoff
