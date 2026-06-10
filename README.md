@@ -21,6 +21,7 @@ Milestone 2 adds the backend database session layer, SQLModel tables, and develo
 Milestone 4 adds deterministic local document ingestion, chunking, prompt-injection flagging, and lexical retrieval without external embeddings or paid APIs.
 Milestone 5 adds a typed, allowlisted, audited safe tool registry with deterministic mock/read-only tools and blocked dangerous actions.
 Milestone 6 adds a deterministic backend agent workflow with a local mock LLM, fixed graph nodes, metacognitive self-assessment, RAG evidence retrieval, and safe-tool execution that always ends in human review.
+Milestone 7 adds an independently testable watchdog safety layer that evaluates recommendations, suspicious context, confidence, and grounding before agent output is considered safe for human review.
 
 ## Local Setup
 
@@ -270,7 +271,7 @@ It does not call OpenAI, Anthropic, LangGraph, LangChain, or any external infras
 What it does:
 
 - creates an `AgentRun` from an existing alert
-- executes a fixed graph of nodes: ingest, classify, retrieve, plan, execute safe tools, synthesize, self-assess, recommend, and wait for human approval
+- executes a fixed graph of nodes: ingest, classify, retrieve, plan, execute safe tools, synthesize, self-assess, recommend, run watchdog policy checks, and wait for human approval
 - uses Milestone 4 retrieval for grounded citations
 - uses Milestone 5 allowlisted tools for mock read-only evidence gathering
 - persists `AgentRun`, `AgentStep`, `SelfAssessment`, `ToolCall`, `SafetyEvent`, and `TicketDraft` records as appropriate
@@ -317,8 +318,143 @@ Workflow behavior:
 
 - prompt-injection and other suspicious content are surfaced in `notes`, citations, and safety events
 - dangerous actions such as `cancel_job` or `isolate_node` appear only as blocked recommendations requiring human approval
+- the watchdog layer evaluates dangerous actions, prompt-injection indicators, untrusted context, weak grounding, suspicious tool output, and bulk operations before the run is handed to a human
 - final recommendations can create internal ticket drafts, but they never call external ticketing systems
 - the workflow is designed for deterministic demos and tests, not for autonomous remediation
+
+## Watchdog Safety Layer
+
+The watchdog is deterministic, local, and independently testable.
+It never executes infrastructure actions; it only evaluates whether the agent output is safe enough to hand to a human reviewer.
+
+Policies currently implemented:
+
+- dangerous action gate
+- prompt-injection gate
+- untrusted context gate
+- low-confidence high-severity gate
+- weak grounding gate
+- bulk operation gate
+- unsafe tool output gate
+
+Decision statuses:
+
+- `allow`
+- `allow_with_warnings`
+- `require_human_approval`
+- `block`
+
+Evaluate a safe recommendation directly:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/watchdog/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alert": {
+      "severity": "warning",
+      "title": "Safe operational note"
+    },
+    "retrieved_context": [],
+    "tool_results": [],
+    "hypotheses": [
+      {
+        "title": "Benign hypothesis",
+        "summary": "This looks like a bounded operational issue.",
+        "supporting_evidence": ["Runbook A chunk 1"]
+      }
+    ],
+    "evidence_items": [
+      {
+        "summary": "Trusted runbook excerpt",
+        "citation": "Runbook A chunk 1",
+        "trust_level": "trusted",
+        "suspicious": false
+      }
+    ],
+    "planned_tools": [],
+    "blocked_tools": [],
+    "self_assessment": {
+      "confidence_score": 0.9,
+      "missing_evidence": [],
+      "uncertainty_level": "low"
+    },
+    "final_recommendation": {
+      "summary": "Review the trusted runbook and continue with human oversight.",
+      "evidence": [
+        {
+          "summary": "Trusted runbook excerpt",
+          "citation": "Runbook A chunk 1",
+          "trust_level": "trusted",
+          "suspicious": false
+        }
+      ],
+      "citations": ["Runbook A chunk 1"],
+      "recommended_next_steps": ["Open a draft ticket for follow-up."],
+      "blocked_actions_requiring_human_approval": [],
+      "missing_evidence": [],
+      "notes": []
+    }
+  }'
+```
+
+Evaluate a dangerous recommendation:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/watchdog/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alert": {
+      "severity": "critical",
+      "title": "GPU cluster compromise suspicion"
+    },
+    "retrieved_context": [],
+    "tool_results": [],
+    "hypotheses": [],
+    "evidence_items": [],
+    "planned_tools": [],
+    "blocked_tools": [],
+    "self_assessment": {
+      "confidence_score": 0.41,
+      "missing_evidence": ["validated owner of the job"],
+      "uncertainty_level": "high"
+    },
+    "final_recommendation": {
+      "summary": "Drain all nodes and cancel_job immediately.",
+      "evidence": [],
+      "citations": [],
+      "recommended_next_steps": ["Drain all nodes in the entire cluster."],
+      "blocked_actions_requiring_human_approval": [
+        {
+          "tool_name": "drain_node",
+          "target": "all nodes",
+          "rationale": "Emergency containment proposal."
+        }
+      ],
+      "missing_evidence": ["validated owner of the job"],
+      "notes": []
+    }
+  }'
+```
+
+Run the agent and inspect the watchdog result:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
+  }'
+```
+
+```bash
+curl http://localhost:8000/api/v1/agent/runs/<agent_run_id>
+```
+
+Watchdog behavior:
+
+- it flags or blocks risky recommendations, but never executes them
+- it persists `SafetyEvent` records for important findings
+- it is designed to be a policy layer in front of human review, not an autonomous control plane
 
 Frontend:
 
@@ -381,7 +517,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 6 deterministic agent workflow`
+`Milestone 7 watchdog safety layer`
 
 Implemented in this milestone:
 
@@ -391,4 +527,5 @@ Implemented in this milestone:
 - static demo seed service, `POST /api/v1/demo/seed`, and backend tests covering model registration, database routes, and demo seeding
 - deterministic document ingestion, chunking, prompt-injection flagging, and lexical chunk retrieval via `/api/v1/documents` and `/api/v1/rag/retrieve`
 - typed, allowlisted, audited mock tool registry via `/api/v1/tools` with blocked dangerous-action definitions and database-backed tool-call auditing
-- deterministic agent workflow via `/api/v1/agent/runs` with fixed nodes, mock reasoning, self-assessment, grounded citations, safe tool execution, ticket-draft creation, and mandatory human-review handoff
+- deterministic agent workflow via `/api/v1/agent/runs` with fixed nodes, mock reasoning, self-assessment, grounded citations, safe tool execution, ticket-draft creation, watchdog policy checks, and mandatory human-review handoff
+- standalone watchdog evaluation via `/api/v1/watchdog` with policy findings, aggregated decisions, and persisted safety events for agent runs

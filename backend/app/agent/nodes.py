@@ -25,6 +25,7 @@ from app.models.base import utcnow
 from app.rag.injection import detect_prompt_injection
 from app.rag.retrieval import retrieve_chunks
 from app.tools import ToolExecutionContext, execute_tool
+from app.watchdog import WatchdogInput, evaluate_watchdog, record_watchdog_decision
 
 NodeHandler = Callable[[AgentStep], dict[str, Any]]
 NODE_ORDER = (
@@ -36,6 +37,7 @@ NODE_ORDER = (
     "synthesize_hypotheses",
     "metacognitive_self_assessment",
     "generate_recommendation",
+    "watchdog_policy_check",
     "wait_for_human_approval",
 )
 
@@ -599,6 +601,75 @@ def generate_recommendation(session: Session, agent_run: AgentRun, state: AgentS
         },
         handler,
         commit_started_step=True,
+    )
+
+
+def watchdog_policy_check(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
+    def handler(_: AgentStep) -> dict[str, Any]:
+        alert_payload = state.alert_summary.model_dump(mode="json") if state.alert_summary else {}
+        if state.alert_classification:
+            alert_payload["classification"] = state.alert_classification
+
+        watchdog_input = WatchdogInput(
+            alert=alert_payload,
+            retrieved_context=[item.model_dump(mode="json") for item in state.retrieved_context],
+            tool_results=[item.model_dump(mode="json") for item in state.tool_results],
+            hypotheses=[item.model_dump(mode="json") for item in state.hypotheses],
+            evidence_items=[item.model_dump(mode="json") for item in state.evidence_items],
+            planned_tools=[item.model_dump(mode="json") for item in state.planned_tools],
+            blocked_tools=[item.model_dump(mode="json") for item in state.blocked_tools],
+            self_assessment=(
+                state.self_assessment.model_dump(mode="json") if state.self_assessment is not None else None
+            ),
+            final_recommendation=(
+                state.final_recommendation.model_dump(mode="json") if state.final_recommendation is not None else None
+            ),
+        )
+        decision = evaluate_watchdog(watchdog_input)
+        record_watchdog_decision(session, agent_run_id=agent_run.id, decision=decision)
+        state.watchdog_decision = decision.model_dump(mode="json")
+
+        if state.final_recommendation is not None:
+            state.final_recommendation.watchdog_status = decision.status.value
+            state.final_recommendation.watchdog_summary = decision.summary
+            state.final_recommendation.watchdog_findings = [
+                finding.model_dump(mode="json") for finding in decision.findings
+            ]
+            if decision.status.value == "block":
+                state.final_recommendation.summary = (
+                    f"Blocked by watchdog pending human review. {state.final_recommendation.summary}"
+                )
+                if "Blocked by watchdog pending human review." not in state.final_recommendation.notes:
+                    state.final_recommendation.notes.append("Blocked by watchdog pending human review.")
+            else:
+                state.final_recommendation.notes.append(f"Watchdog status: {decision.status.value}.")
+            state.final_recommendation.requires_human_approval = True
+
+        state.requires_human_approval = True
+        if decision.status.value in {"block", "require_human_approval"}:
+            state.status = "waiting_for_human"
+
+        return {
+            "watchdog_status": decision.status.value,
+            "watchdog_summary": decision.summary,
+            "findings": [finding.model_dump(mode="json") for finding in decision.findings],
+            "final_recommendation": (
+                state.final_recommendation.model_dump(mode="json") if state.final_recommendation else None
+            ),
+        }
+
+    return _run_node(
+        session,
+        agent_run,
+        state,
+        "watchdog_policy_check",
+        {
+            "final_recommendation": (
+                state.final_recommendation.model_dump(mode="json") if state.final_recommendation else {}
+            ),
+            "self_assessment": state.self_assessment.model_dump(mode="json") if state.self_assessment else {},
+        },
+        handler,
     )
 
 

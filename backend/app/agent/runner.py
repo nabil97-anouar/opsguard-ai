@@ -15,6 +15,7 @@ from app.agent.nodes import (
     retrieve_context,
     synthesize_hypotheses,
     wait_for_human_approval,
+    watchdog_policy_check,
 )
 from app.agent.schemas import AgentRunResult, StepExecutionSummary
 from app.agent.state import AgentState, AssessmentSnapshot, FinalRecommendation
@@ -104,6 +105,7 @@ def run_agent_for_alert(session: Session, *, alert_id: UUID) -> AgentRunResult:
         synthesize_hypotheses(session, agent_run, state)
         metacognitive_self_assessment(session, agent_run, state)
         generate_recommendation(session, agent_run, state)
+        watchdog_policy_check(session, agent_run, state)
         wait_for_human_approval(session, agent_run, state)
         session.refresh(agent_run)
         return _state_result(state, agent_run)

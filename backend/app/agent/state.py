@@ -102,6 +102,9 @@ class FinalRecommendation(BaseModel):
     notes: list[str] = Field(default_factory=list)
     requires_human_approval: bool = True
     ticket_draft_id: str | None = None
+    watchdog_status: str | None = None
+    watchdog_summary: str | None = None
+    watchdog_findings: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentState(BaseModel):
@@ -120,6 +123,7 @@ class AgentState(BaseModel):
     blocked_tools: list[BlockedToolRecommendation] = Field(default_factory=list)
     self_assessment: AssessmentSnapshot | None = None
     final_recommendation: FinalRecommendation | None = None
+    watchdog_decision: dict[str, Any] | None = None
     requires_human_approval: bool = True
     status: str = "running"
     steps: list[dict[str, Any]] = Field(default_factory=list)

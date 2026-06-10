@@ -75,6 +75,9 @@ class FinalRecommendationResponse(SchemaModel):
     notes: list[str] = Field(default_factory=list)
     requires_human_approval: bool = True
     ticket_draft_id: str | None = None
+    watchdog_status: str | None = None
+    watchdog_summary: str | None = None
+    watchdog_findings: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentStepResponse(SchemaModel):

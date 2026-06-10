@@ -39,6 +39,13 @@ from app.schemas.tools import (
     ToolListItem,
     ToolListResponse,
 )
+from app.schemas.watchdog import (
+    WatchdogEvaluateRequest,
+    WatchdogEvaluateResponse,
+    WatchdogFindingResponse,
+    WatchdogPoliciesResponse,
+    WatchdogPolicyItem,
+)
 
 __all__ = [
     "AgentRunRead",
@@ -81,4 +88,9 @@ __all__ = [
     "ToolExecuteResponse",
     "ToolListItem",
     "ToolListResponse",
+    "WatchdogEvaluateRequest",
+    "WatchdogEvaluateResponse",
+    "WatchdogFindingResponse",
+    "WatchdogPoliciesResponse",
+    "WatchdogPolicyItem",
 ]
