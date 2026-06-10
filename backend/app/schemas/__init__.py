@@ -19,7 +19,16 @@ from app.schemas.demo import DemoSeedRequest, DemoSeedResponse, DemoSeedSummary
 from app.schemas.document import DocumentChunkRead, DocumentRead
 from app.schemas.evaluation import EvaluationScoreRead
 from app.schemas.feedback import HumanFeedbackRead
-from app.schemas.harness import SecurityHarnessResultRead, SecurityHarnessTestRead
+from app.schemas.harness import (
+    HarnessResultListResponse,
+    HarnessResultResponse,
+    HarnessRunRequest,
+    HarnessRunResponse,
+    HarnessScenarioListResponse,
+    HarnessScenarioResponse,
+    SecurityHarnessResultRead,
+    SecurityHarnessTestRead,
+)
 from app.schemas.health import DependencyHealth, HealthResponse
 from app.schemas.kill_chain import KillChainMappingRead
 from app.schemas.rag import (
@@ -71,6 +80,12 @@ __all__ = [
     "DocumentRead",
     "EvaluationScoreRead",
     "HealthResponse",
+    "HarnessResultListResponse",
+    "HarnessResultResponse",
+    "HarnessRunRequest",
+    "HarnessRunResponse",
+    "HarnessScenarioListResponse",
+    "HarnessScenarioResponse",
     "HumanFeedbackRead",
     "IncidentRead",
     "KillChainMappingRead",

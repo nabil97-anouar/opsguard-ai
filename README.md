@@ -22,6 +22,7 @@ Milestone 4 adds deterministic local document ingestion, chunking, prompt-inject
 Milestone 5 adds a typed, allowlisted, audited safe tool registry with deterministic mock/read-only tools and blocked dangerous actions.
 Milestone 6 adds a deterministic backend agent workflow with a local mock LLM, fixed graph nodes, metacognitive self-assessment, RAG evidence retrieval, and safe-tool execution that always ends in human review.
 Milestone 7 adds an independently testable watchdog safety layer that evaluates recommendations, suspicious context, confidence, and grounding before agent output is considered safe for human review.
+Milestone 8 adds a deterministic security harness runner that exercises adversarial scenarios across RAG, tools, the agent workflow, and watchdog policies, then persists structured results.
 
 ## Local Setup
 
@@ -456,6 +457,88 @@ Watchdog behavior:
 - it persists `SafetyEvent` records for important findings
 - it is designed to be a policy layer in front of human review, not an autonomous control plane
 
+## Security Harness
+
+The security harness is deterministic, local-only, and designed to exercise the existing retrieval, tool, agent, and watchdog layers without any external APIs.
+It persists scenario definitions and run results to the database so the system can be tested repeatedly with reproducible outcomes.
+
+Included scenarios:
+
+- prompt injection in retrieved documents
+- prompt injection in tool outputs and logs
+- malicious tool feedback
+- unsafe action recommendations
+- unsupported conclusions with weak grounding
+- untrusted context reliance
+- low-confidence high-severity incidents
+- blocked dangerous tool attempts
+- clean safe control case
+
+Scoring and result states:
+
+- `passed`: all expected safe-behavior checks succeeded
+- `partial`: some checks succeeded, but coverage or handling was incomplete
+- `failed`: the scenario did not satisfy the required safety checks
+- `score`: normalized `0.0` to `1.0`, stored alongside structured findings, linked safety events, watchdog status, and any related `agent_run_id`
+
+How it works:
+
+- seeded demo data provides the poisoned runbook, suspicious logs, and operational context
+- selected scenarios run the existing RAG retrieval, safe tool registry, deterministic agent flow, or watchdog evaluator directly
+- results are persisted to `security_harness_tests` and `security_harness_results`
+- linked `SafetyEvent` evidence is preserved when scenarios trigger watchdog or tool-registry protections
+
+List available harness scenarios:
+
+```bash
+curl http://localhost:8000/api/v1/harness/scenarios
+```
+
+Run all harness scenarios:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/harness/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_ids": null,
+    "reset_demo_data": true
+  }'
+```
+
+Run selected scenarios only:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/harness/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_ids": [
+      "prompt_injection_in_retrieved_document",
+      "dangerous_tool_blocked",
+      "clean_safe_case"
+    ],
+    "reset_demo_data": true
+  }'
+```
+
+Fetch recent harness results:
+
+```bash
+curl http://localhost:8000/api/v1/harness/results
+```
+
+Fetch one harness run by correlation ID:
+
+```bash
+curl http://localhost:8000/api/v1/harness/results/<harness_run_id>
+```
+
+Harness guarantees:
+
+- no shell execution, subprocess calls, Slurm commands, Docker commands, or destructive infrastructure actions
+- no OpenAI, Anthropic, or other external LLM API usage
+- no autonomous remediation; the harness only evaluates and records system behavior
+- reproducible, database-backed results suitable for local demos and automated tests
+
 Frontend:
 
 ```bash
@@ -517,7 +600,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 7 watchdog safety layer`
+`Milestone 8 security harness runner`
 
 Implemented in this milestone:
 
@@ -529,3 +612,4 @@ Implemented in this milestone:
 - typed, allowlisted, audited mock tool registry via `/api/v1/tools` with blocked dangerous-action definitions and database-backed tool-call auditing
 - deterministic agent workflow via `/api/v1/agent/runs` with fixed nodes, mock reasoning, self-assessment, grounded citations, safe tool execution, ticket-draft creation, watchdog policy checks, and mandatory human-review handoff
 - standalone watchdog evaluation via `/api/v1/watchdog` with policy findings, aggregated decisions, and persisted safety events for agent runs
+- deterministic security harness execution via `/api/v1/harness` with scenario registry, persisted harness tests/results, adversarial safety checks, and linked watchdog or tool-registry evidence
