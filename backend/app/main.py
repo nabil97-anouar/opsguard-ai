@@ -10,6 +10,7 @@ from app.api.routes.agent import router as agent_router
 from app.api.routes.db import router as db_router
 from app.api.routes.demo import router as demo_router
 from app.api.routes.documents import router as documents_router
+from app.api.routes.evaluation import router as evaluation_router
 from app.api.routes.harness import router as harness_router
 from app.api.routes.health import router as health_router
 from app.api.routes.rag import router as rag_router
@@ -73,6 +74,7 @@ def create_application() -> FastAPI:
     application.include_router(tools_router, prefix=settings.api_v1_prefix)
     application.include_router(watchdog_router, prefix=settings.api_v1_prefix)
     application.include_router(harness_router, prefix=settings.api_v1_prefix)
+    application.include_router(evaluation_router, prefix=settings.api_v1_prefix)
     return application
 
 

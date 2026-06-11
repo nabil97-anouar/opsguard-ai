@@ -17,7 +17,15 @@ from app.schemas.assessment import SelfAssessmentRead
 from app.schemas.db import CreateTablesResponse, DatabaseHealthResponse
 from app.schemas.demo import DemoSeedRequest, DemoSeedResponse, DemoSeedSummary
 from app.schemas.document import DocumentChunkRead, DocumentRead
-from app.schemas.evaluation import EvaluationScoreRead
+from app.schemas.evaluation import (
+    EvaluationReportResponse,
+    EvaluationRunRequest,
+    EvaluationRunResponse,
+    EvaluationScoreListResponse,
+    EvaluationScoreRead,
+    EvaluationScoreResponse,
+    EvaluationSummaryResponse,
+)
 from app.schemas.feedback import HumanFeedbackRead
 from app.schemas.harness import (
     HarnessResultListResponse,
@@ -78,7 +86,13 @@ __all__ = [
     "DocumentIngestResponse",
     "DocumentListItem",
     "DocumentRead",
+    "EvaluationReportResponse",
+    "EvaluationRunRequest",
+    "EvaluationRunResponse",
+    "EvaluationScoreListResponse",
     "EvaluationScoreRead",
+    "EvaluationScoreResponse",
+    "EvaluationSummaryResponse",
     "HealthResponse",
     "HarnessResultListResponse",
     "HarnessResultResponse",

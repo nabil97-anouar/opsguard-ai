@@ -24,6 +24,7 @@ Milestone 6 adds a deterministic backend agent workflow with a local mock LLM, f
 Milestone 7 adds an independently testable watchdog safety layer that evaluates recommendations, suspicious context, confidence, and grounding before agent output is considered safe for human review.
 Milestone 8 adds a deterministic security harness runner that exercises adversarial scenarios across RAG, tools, the agent workflow, and watchdog policies, then persists structured results.
 Milestone 9 adds the polished frontend dashboard that presents seeded incidents, agent traces, grounded citations, watchdog findings, and harness evidence as a premium local demo.
+Milestone 10 adds the backend evaluation and reporting layer that turns persisted harness, watchdog, tool, and agent data into exportable safety scorecards.
 
 ## Local Setup
 
@@ -600,6 +601,68 @@ What the dashboard demonstrates:
 - harness scenario scores with pass / failed / partial status and linked safety-event evidence
 - a clear AI safety story: no real infrastructure control, no arbitrary shell execution, and no autonomous destructive actions
 
+## Evaluation and Reports
+
+The evaluation layer is deterministic and local-only.
+It aggregates persisted agent runs, watchdog findings, safety events, tool calls, and harness results into a scorecard plus export-friendly Markdown and JSON reports.
+
+Scorecard dimensions:
+
+- `safety_score`: harness pass rate plus dangerous-action blocking posture
+- `grounding_score`: citation coverage and weak-grounding pressure
+- `tool_safety_score`: blocked dangerous tools, failed calls, and no-shell-execution posture
+- `watchdog_score`: triggered policy coverage plus human-approval enforcement
+- `overall_score`: weighted average of the four dimensions above
+
+Metric families included in the summary:
+
+- harness performance
+- watchdog policy coverage
+- prompt-injection resistance
+- tool safety
+- agent quality
+- grounding / evidence quality
+- human approval enforcement
+
+Run an evaluation:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/evaluation/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "run_harness_if_empty": true,
+    "report_type": "full"
+  }'
+```
+
+Get the latest evaluation summary:
+
+```bash
+curl http://localhost:8000/api/v1/evaluation/summary
+```
+
+Get the Markdown report:
+
+```bash
+curl http://localhost:8000/api/v1/evaluation/report.md
+```
+
+Get the JSON report:
+
+```bash
+curl http://localhost:8000/api/v1/evaluation/report.json
+```
+
+List persisted evaluation scores:
+
+```bash
+curl http://localhost:8000/api/v1/evaluation/scores
+```
+
+Evaluation limitation:
+
+- this is a deterministic local demo/evaluation, not a production SOC certification or third-party security attestation
+
 ## Running Tests
 
 Backend:
@@ -653,7 +716,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 9 frontend dashboard`
+`Milestone 10 evaluation + report export`
 
 Implemented in this milestone:
 
@@ -667,3 +730,4 @@ Implemented in this milestone:
 - standalone watchdog evaluation via `/api/v1/watchdog` with policy findings, aggregated decisions, and persisted safety events for agent runs
 - deterministic security harness execution via `/api/v1/harness` with scenario registry, persisted harness tests/results, adversarial safety checks, and linked watchdog or tool-registry evidence
 - polished Next.js dashboard at `/` and `/dashboard` with live system status, demo controls, agent traces, RAG citations, tool-call audit views, watchdog panels, and harness result summaries
+- evaluation summary, score persistence, and Markdown/JSON reporting via `/api/v1/evaluation` over existing harness, watchdog, agent, and tool data
