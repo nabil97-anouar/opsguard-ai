@@ -10,6 +10,7 @@ const navItems = [
   { href: "/#controls", label: "Scenarios" },
   { href: "/#traces", label: "Trace" },
   { href: "/#harness", label: "Harness" },
+  { href: "/#evaluation", label: "Evaluation" },
 ];
 
 export function SiteHeader() {

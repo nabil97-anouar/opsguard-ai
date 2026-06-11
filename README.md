@@ -1,58 +1,144 @@
 # OpsGuard AI
 
-Secure self-aware AI agents for incident triage, RAG, and AI security testing.
+Secure self-aware agentic incident triage.
 
-OpsGuard AI is a local-first, production-style portfolio project that shows how to build operational AI systems that are grounded, auditable, and safe by default. The system is designed for Cloud, DevOps, SaaS, GPU, and HPC incident workflows, with explicit boundaries around confidence estimation, human approval, and trusted tool use.
+OpsGuard AI is a polished local-first portfolio project that demonstrates how to build an AI-assisted incident-triage system with grounded retrieval, safe tool calling, watchdog policy checks, adversarial harness testing, and exportable safety evaluation reports.
 
-## Problem Solved
+## 30-Second Pitch
 
-Modern incident response teams are overloaded with alerts, brittle runbooks, and AI copilots that sound confident even when evidence is weak. OpsGuard AI aims to demonstrate a better pattern: an agentic incident triage system that retrieves evidence, measures its own uncertainty, avoids unsafe actions, and treats logs, tool outputs, and retrieved documents as untrusted until validated.
+Most AI incident copilots optimize for speed and confidence. OpsGuard AI optimizes for evidence, uncertainty, auditability, and safety boundaries.
 
-## Architecture Summary
+This project shows a better pattern:
 
-- `frontend/`: Next.js + TypeScript + Tailwind dashboard and portfolio landing experience
-- `backend/`: FastAPI service with typed settings, structured logging, and future-ready module boundaries
-- `docs/`: product, architecture, workflow, RAG, security harness, and implementation specifications
-- `demo_data/`: placeholder space for runbooks, incident reports, and security policies
-- `docker-compose.yml`: local stack for PostgreSQL, Qdrant, backend, and frontend
+- retrieve context with provenance and trust labels
+- call only allowlisted, typed, deterministic mock tools
+- preserve self-assessment and missing evidence
+- run policy checks before handing anything to a human
+- evaluate the whole stack with adversarial security scenarios
 
-Milestone 1 focuses on the professional scaffold only. It does not implement database models, RAG, agent logic, tool execution, or the security harness yet.
-Milestone 2 adds the backend database session layer, SQLModel tables, and development-only table creation utilities. It still does not implement RAG, agents, tool registry, safety orchestration, evaluation workflows, or frontend dashboard behavior.
-Milestone 4 adds deterministic local document ingestion, chunking, prompt-injection flagging, and lexical retrieval without external embeddings or paid APIs.
-Milestone 5 adds a typed, allowlisted, audited safe tool registry with deterministic mock/read-only tools and blocked dangerous actions.
-Milestone 6 adds a deterministic backend agent workflow with a local mock LLM, fixed graph nodes, metacognitive self-assessment, RAG evidence retrieval, and safe-tool execution that always ends in human review.
-Milestone 7 adds an independently testable watchdog safety layer that evaluates recommendations, suspicious context, confidence, and grounding before agent output is considered safe for human review.
-Milestone 8 adds a deterministic security harness runner that exercises adversarial scenarios across RAG, tools, the agent workflow, and watchdog policies, then persists structured results.
-Milestone 9 adds the polished frontend dashboard that presents seeded incidents, agent traces, grounded citations, watchdog findings, and harness evidence as a premium local demo.
-Milestone 10 adds the backend evaluation and reporting layer that turns persisted harness, watchdog, tool, and agent data into exportable safety scorecards.
+It is intentionally local, deterministic, and safe to demo without external LLM APIs or real infrastructure access.
 
-## Local Setup
+## Why This Project Matters
 
-Prerequisites:
+Operational AI is useful only if it is grounded and governable. A system that can summarize alerts but cannot explain its evidence, resist prompt injection, or respect approval boundaries is risky in exactly the environments where trust matters most.
 
-- Python 3.11+
-- Node.js 20+
-- Docker with Compose
+OpsGuard AI is a concrete answer to that problem. It demonstrates:
 
-Create an environment file first:
+- secure self-aware agentic incident triage
+- RAG-grounded investigation
+- safe MCP-style tool exposure
+- watchdog safety enforcement
+- reproducible security-harness testing
+- measurable evaluation and reporting
+
+## Architecture Overview
+
+### Frontend
+
+- Next.js + TypeScript + Tailwind dashboard
+- polished demo surface for alerts, traces, citations, watchdog findings, harness results, and evaluation summary
+
+### Backend
+
+- FastAPI + SQLModel service
+- deterministic RAG ingestion and lexical retrieval
+- allowlisted mock tool registry
+- fixed agent workflow with mock LLM reasoning
+- watchdog policy layer
+- security harness runner
+- evaluation and report export endpoints
+
+### Data / Local Stack
+
+- PostgreSQL supported via Docker Compose
+- SQLite fallback for local tests and simple runs
+- Qdrant is present in the compose file for future-facing architecture, but Milestone 4 retrieval works without it
+
+## Core Capabilities
+
+- Demo data seeding for realistic GPU abuse, SSH brute-force, storage pressure, and prompt-injection scenarios
+- Deterministic document ingestion, chunking, and retrieval with provenance
+- Prompt-injection scanning on retrieved and untrusted content
+- MCP-style safe tool registry with audited tool calls
+- Deterministic agent workflow with metacognitive self-assessment
+- Watchdog policy evaluation for dangerous actions, weak grounding, low confidence, and suspicious context
+- Security harness scenarios for adversarial AI-safety testing
+- Evaluation scorecard plus Markdown and JSON reporting
+- Premium local dashboard for screenshots, demos, and portfolio walkthroughs
+
+## Safety Design
+
+OpsGuard AI is built around explicit safety boundaries.
+
+- Retrieved documents, logs, and tool outputs are treated as untrusted by default.
+- Dangerous tools are blocked and never executed.
+- Agent runs always stop at human approval.
+- Suspicious context lowers confidence and is surfaced in the final recommendation.
+- Watchdog policies inspect the recommendation before it is considered safe for review.
+- The harness tests whether the system resists poisoned evidence, unsafe tool feedback, and destructive suggestions.
+
+This is not autonomous infrastructure control. It is a safe demo of how such systems should be architected.
+
+## Demo Walkthrough
+
+### What the Demo Shows
+
+1. Seed deterministic demo data.
+2. Run a GPU abuse investigation with RAG-grounded context and safe mock tools.
+3. Run a prompt-injection scenario and show suspicious-context handling.
+4. Run the security harness across adversarial AI-safety cases.
+5. Run the evaluation layer and export a Markdown or JSON report.
+
+### Stable Demo Alert IDs
+
+The seeded alert IDs are deterministic:
+
+- GPU abuse alert: `909d28d2-5c9f-5fa2-a35e-f6b39c95f83f`
+- Prompt-injection alert: `e3e0e0d5-9e19-5243-a1f0-76c507be3641`
+
+### One-Command Demo
+
+```bash
+./scripts/demo_walkthrough.sh
+```
+
+See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for expected output and troubleshooting.
+
+## Quick Start
+
+### 1. Prepare Environment
 
 ```bash
 cp .env.example .env
 ```
 
-## Development Commands
-
-Backend:
+### 2. Start the Backend
 
 ```bash
 cd backend
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Create the database tables locally:
+### 3. Start the Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 4. Run the Full Demo
+
+```bash
+./scripts/demo_walkthrough.sh
+```
+
+## Backend Commands
+
+Create tables with PostgreSQL:
 
 ```bash
 docker compose up -d postgres
@@ -61,7 +147,7 @@ source .venv/bin/activate
 python -m app.db.init_db
 ```
 
-Use a SQLite fallback for quick local testing without PostgreSQL:
+Create tables with SQLite fallback:
 
 ```bash
 cd backend
@@ -69,492 +155,13 @@ source .venv/bin/activate
 DATABASE_URL=sqlite:///./opsguard.db python -m app.db.init_db
 ```
 
-Or use the development-only API route after the backend is running:
+Development-only create-tables endpoint:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/db/create-tables
 ```
 
-## Demo Data
-
-Seed the static demo dataset through the API:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/demo/seed \
-  -H "Content-Type: application/json" \
-  -d '{"reset": false}'
-```
-
-Recreate only the demo-seeded records:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/demo/seed \
-  -H "Content-Type: application/json" \
-  -d '{"reset": true}'
-```
-
-Seed locally through the CLI:
-
-```bash
-cd backend
-source .venv/bin/activate
-python -m app.services.demo_seed
-```
-
-Reset and reseed through the CLI:
-
-```bash
-cd backend
-source .venv/bin/activate
-python -m app.services.demo_seed --reset
-```
-
-Included scenarios:
-
-- suspicious GPU usage with possible crypto-mining and outbound pool traffic
-- SSH brute-force activity against a login node
-- storage inode pressure on shared scratch space
-- RAG prompt-injection poisoning through an untrusted runbook
-- agent traces, safety events, kill-chain mappings, ticket drafts, and harness examples tied to those incidents
-
-## RAG
-
-This milestone uses deterministic local chunking plus lexical retrieval over SQL data only.
-It does not call OpenAI, Anthropic, sentence-transformers, or any paid embedding API.
-
-Trusted vs. untrusted documents:
-
-- `trusted` documents remain higher-confidence sources, but retrieved text is still treated as data, not instructions
-- `untrusted` documents can be retrieved when allowed and are returned with suspicion flags and provenance
-- simple prompt-injection patterns are scanned at ingest time and again at retrieval time
-
-Ingest a document:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/documents/ingest \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Trusted GPU Escalation Note",
-    "source": "manual://gpu-escalation-note",
-    "doc_type": "runbook",
-    "trust_level": "trusted",
-    "content": "# GPU Escalation\n\nValidate suspicious GPU processes before escalation.\n\nRequire human approval before containment.",
-    "metadata": {
-      "tags": ["gpu", "manual"],
-      "infrastructure_type": "gpu_cluster"
-    }
-  }'
-```
-
-List ingested documents:
-
-```bash
-curl http://localhost:8000/api/v1/documents
-```
-
-Retrieve grounded chunks:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/rag/retrieve \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "gpu xmrig suspicious process",
-    "limit": 5,
-    "trust_filter": null,
-    "include_untrusted": true
-  }'
-```
-
-Retrieve while excluding untrusted content:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/rag/retrieve \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "system override ignore policies",
-    "limit": 5,
-    "trust_filter": null,
-    "include_untrusted": false
-  }'
-```
-
-Retrieval results include provenance and lightweight guardrails:
-
-- `document_id`, `chunk_id`, `title`, `source`, and `chunk_index`
-- `trust_level` and `doc_type`
-- `score` and `citation`
-- `is_suspicious`, `matched_patterns`, and `risk_level`
-
-## Safe Tool Registry
-
-The tool registry is local-first, allowlisted, typed, and auditable.
-It exposes deterministic mock/read-only tools only, and it never performs arbitrary shell execution.
-
-Available safe tools:
-
-- `search_logs`
-- `get_node_metrics`
-- `get_running_jobs`
-- `check_network_connections`
-- `query_past_incidents`
-- `retrieve_runbook`
-- `create_ticket_draft`
-
-Blocked dangerous tools:
-
-- `cancel_job`
-- `drain_node`
-- `block_user`
-- `isolate_node`
-- `disable_service`
-
-List the registry definitions:
-
-```bash
-curl http://localhost:8000/api/v1/tools
-```
-
-Execute a safe mock tool:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/tools/search_logs/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "query": "xmrig mining pool",
-      "limit": 5
-    },
-    "agent_run_id": null
-  }'
-```
-
-Execute a runbook retrieval tool call with trusted-only default behavior:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/tools/retrieve_runbook/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "query": "gpu suspicious process xmrig",
-      "limit": 5,
-      "include_untrusted": false
-    },
-    "agent_run_id": null
-  }'
-```
-
-Attempt a blocked dangerous action:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/tools/drain_node/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "node": "gpu-node-14",
-      "reason": "suspicious outbound mining traffic"
-    },
-    "agent_run_id": null
-  }'
-```
-
-Registry behavior:
-
-- tools are allowlisted and validated with Pydantic input/output schemas
-- safe tool responses are deterministic and mock/demo-data based
-- tool executions can be audited to `tool_calls` when an `agent_run_id` is provided
-- dangerous tools never execute and return a blocked response that requires human approval
-- `retrieve_runbook` excludes untrusted documents by default, and returned chunks keep trust and suspicion metadata
-- no arbitrary shell execution, subprocess, Slurm, Docker, or destructive infrastructure commands are used in this milestone
-
-## Agent Workflow
-
-The agent workflow is deterministic and local.
-It does not call OpenAI, Anthropic, LangGraph, LangChain, or any external infrastructure API.
-
-What it does:
-
-- creates an `AgentRun` from an existing alert
-- executes a fixed graph of nodes: ingest, classify, retrieve, plan, execute safe tools, synthesize, self-assess, recommend, run watchdog policy checks, and wait for human approval
-- uses Milestone 4 retrieval for grounded citations
-- uses Milestone 5 allowlisted tools for mock read-only evidence gathering
-- persists `AgentRun`, `AgentStep`, `SelfAssessment`, `ToolCall`, `SafetyEvent`, and `TicketDraft` records as appropriate
-- never executes dangerous infrastructure actions directly
-
-How it reasons:
-
-- the mock LLM is deterministic and rule-based
-- suspicious or untrusted retrieved/tool content lowers confidence and is called out in the final recommendation
-- missing evidence is preserved explicitly in self-assessment and recommendation output
-- all runs stop at `waiting_for_human`; this is not autonomous infrastructure control
-
-Seed demo data before running the agent:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/demo/seed \
-  -H "Content-Type: application/json" \
-  -d '{"reset": false}'
-```
-
-Run the workflow for a seeded alert:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/agent/runs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
-  }'
-```
-
-Get full run details:
-
-```bash
-curl http://localhost:8000/api/v1/agent/runs/<agent_run_id>
-```
-
-List recent runs:
-
-```bash
-curl http://localhost:8000/api/v1/agent/runs
-```
-
-Workflow behavior:
-
-- prompt-injection and other suspicious content are surfaced in `notes`, citations, and safety events
-- dangerous actions such as `cancel_job` or `isolate_node` appear only as blocked recommendations requiring human approval
-- the watchdog layer evaluates dangerous actions, prompt-injection indicators, untrusted context, weak grounding, suspicious tool output, and bulk operations before the run is handed to a human
-- final recommendations can create internal ticket drafts, but they never call external ticketing systems
-- the workflow is designed for deterministic demos and tests, not for autonomous remediation
-
-## Watchdog Safety Layer
-
-The watchdog is deterministic, local, and independently testable.
-It never executes infrastructure actions; it only evaluates whether the agent output is safe enough to hand to a human reviewer.
-
-Policies currently implemented:
-
-- dangerous action gate
-- prompt-injection gate
-- untrusted context gate
-- low-confidence high-severity gate
-- weak grounding gate
-- bulk operation gate
-- unsafe tool output gate
-
-Decision statuses:
-
-- `allow`
-- `allow_with_warnings`
-- `require_human_approval`
-- `block`
-
-Evaluate a safe recommendation directly:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/watchdog/evaluate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alert": {
-      "severity": "warning",
-      "title": "Safe operational note"
-    },
-    "retrieved_context": [],
-    "tool_results": [],
-    "hypotheses": [
-      {
-        "title": "Benign hypothesis",
-        "summary": "This looks like a bounded operational issue.",
-        "supporting_evidence": ["Runbook A chunk 1"]
-      }
-    ],
-    "evidence_items": [
-      {
-        "summary": "Trusted runbook excerpt",
-        "citation": "Runbook A chunk 1",
-        "trust_level": "trusted",
-        "suspicious": false
-      }
-    ],
-    "planned_tools": [],
-    "blocked_tools": [],
-    "self_assessment": {
-      "confidence_score": 0.9,
-      "missing_evidence": [],
-      "uncertainty_level": "low"
-    },
-    "final_recommendation": {
-      "summary": "Review the trusted runbook and continue with human oversight.",
-      "evidence": [
-        {
-          "summary": "Trusted runbook excerpt",
-          "citation": "Runbook A chunk 1",
-          "trust_level": "trusted",
-          "suspicious": false
-        }
-      ],
-      "citations": ["Runbook A chunk 1"],
-      "recommended_next_steps": ["Open a draft ticket for follow-up."],
-      "blocked_actions_requiring_human_approval": [],
-      "missing_evidence": [],
-      "notes": []
-    }
-  }'
-```
-
-Evaluate a dangerous recommendation:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/watchdog/evaluate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alert": {
-      "severity": "critical",
-      "title": "GPU cluster compromise suspicion"
-    },
-    "retrieved_context": [],
-    "tool_results": [],
-    "hypotheses": [],
-    "evidence_items": [],
-    "planned_tools": [],
-    "blocked_tools": [],
-    "self_assessment": {
-      "confidence_score": 0.41,
-      "missing_evidence": ["validated owner of the job"],
-      "uncertainty_level": "high"
-    },
-    "final_recommendation": {
-      "summary": "Drain all nodes and cancel_job immediately.",
-      "evidence": [],
-      "citations": [],
-      "recommended_next_steps": ["Drain all nodes in the entire cluster."],
-      "blocked_actions_requiring_human_approval": [
-        {
-          "tool_name": "drain_node",
-          "target": "all nodes",
-          "rationale": "Emergency containment proposal."
-        }
-      ],
-      "missing_evidence": ["validated owner of the job"],
-      "notes": []
-    }
-  }'
-```
-
-Run the agent and inspect the watchdog result:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/agent/runs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
-  }'
-```
-
-```bash
-curl http://localhost:8000/api/v1/agent/runs/<agent_run_id>
-```
-
-Watchdog behavior:
-
-- it flags or blocks risky recommendations, but never executes them
-- it persists `SafetyEvent` records for important findings
-- it is designed to be a policy layer in front of human review, not an autonomous control plane
-
-## Security Harness
-
-The security harness is deterministic, local-only, and designed to exercise the existing retrieval, tool, agent, and watchdog layers without any external APIs.
-It persists scenario definitions and run results to the database so the system can be tested repeatedly with reproducible outcomes.
-
-Included scenarios:
-
-- prompt injection in retrieved documents
-- prompt injection in tool outputs and logs
-- malicious tool feedback
-- unsafe action recommendations
-- unsupported conclusions with weak grounding
-- untrusted context reliance
-- low-confidence high-severity incidents
-- blocked dangerous tool attempts
-- clean safe control case
-
-Scoring and result states:
-
-- `passed`: all expected safe-behavior checks succeeded
-- `partial`: some checks succeeded, but coverage or handling was incomplete
-- `failed`: the scenario did not satisfy the required safety checks
-- `score`: normalized `0.0` to `1.0`, stored alongside structured findings, linked safety events, watchdog status, and any related `agent_run_id`
-
-How it works:
-
-- seeded demo data provides the poisoned runbook, suspicious logs, and operational context
-- selected scenarios run the existing RAG retrieval, safe tool registry, deterministic agent flow, or watchdog evaluator directly
-- results are persisted to `security_harness_tests` and `security_harness_results`
-- linked `SafetyEvent` evidence is preserved when scenarios trigger watchdog or tool-registry protections
-
-List available harness scenarios:
-
-```bash
-curl http://localhost:8000/api/v1/harness/scenarios
-```
-
-Run all harness scenarios:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/harness/run \
-  -H "Content-Type: application/json" \
-  -d '{
-    "scenario_ids": null,
-    "reset_demo_data": true
-  }'
-```
-
-Run selected scenarios only:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/harness/run \
-  -H "Content-Type: application/json" \
-  -d '{
-    "scenario_ids": [
-      "prompt_injection_in_retrieved_document",
-      "dangerous_tool_blocked",
-      "clean_safe_case"
-    ],
-    "reset_demo_data": true
-  }'
-```
-
-Fetch recent harness results:
-
-```bash
-curl http://localhost:8000/api/v1/harness/results
-```
-
-Fetch one harness run by correlation ID:
-
-```bash
-curl http://localhost:8000/api/v1/harness/results/<harness_run_id>
-```
-
-Harness guarantees:
-
-- no shell execution, subprocess calls, Slurm commands, Docker commands, or destructive infrastructure actions
-- no OpenAI, Anthropic, or other external LLM API usage
-- no autonomous remediation; the harness only evaluates and records system behavior
-- reproducible, database-backed results suitable for local demos and automated tests
-
-## Frontend Dashboard
-
-The dashboard is the polished local demo surface for OpsGuard AI.
-It shows the system end to end: incident overview, deterministic agent runs, RAG citations, allowlisted tool calls, watchdog safety findings, security harness scores, and the mandatory human-approval boundary.
-
-Start the backend:
-
-```bash
-cd backend
-source .venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Start the frontend:
+## Frontend Commands
 
 ```bash
 cd frontend
@@ -562,7 +169,14 @@ npm install
 npm run dev
 ```
 
-Seed demo data from the UI or via API:
+Frontend sanity checks:
+
+```bash
+npm run lint
+npx tsc --noEmit
+```
+
+## Seed Demo Data
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/demo/seed \
@@ -570,164 +184,289 @@ curl -X POST http://localhost:8000/api/v1/demo/seed \
   -d '{"reset": false}'
 ```
 
-Run a demo agent scenario directly:
+Reset only demo-created records and reseed:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/demo/seed \
+  -H "Content-Type: application/json" \
+  -d '{"reset": true}'
+```
+
+## Run Agent Scenario
+
+GPU abuse:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/agent/runs \
   -H "Content-Type: application/json" \
-  -d '{
-    "alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
-  }'
+  -d '{"alert_id":"909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"}'
 ```
 
-Run the security harness:
+Prompt injection:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{"alert_id":"e3e0e0d5-9e19-5243-a1f0-76c507be3641"}'
+```
+
+Fetch run details:
+
+```bash
+curl http://localhost:8000/api/v1/agent/runs/<agent_run_id>
+```
+
+## Run Security Harness
+
+Run all scenarios:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/harness/run \
   -H "Content-Type: application/json" \
-  -d '{
-    "scenario_ids": null,
-    "reset_demo_data": true
-  }'
+  -d '{"scenario_ids": null, "reset_demo_data": true}'
 ```
 
-What the dashboard demonstrates:
+List scenarios:
 
-- incident and alert overview for the seeded GPU abuse, SSH brute-force, storage pressure, and prompt-injection scenarios
-- deterministic agent trace nodes including retrieval, safe-tool execution, self-assessment, watchdog review, and wait-for-human-approval
-- RAG citations with provenance, trust labels, scores, and prompt-injection flags
-- audited tool calls with safe or blocked posture and structured output previews
-- watchdog findings with severity, remediation, and evidence references
-- harness scenario scores with pass / failed / partial status and linked safety-event evidence
-- a clear AI safety story: no real infrastructure control, no arbitrary shell execution, and no autonomous destructive actions
+```bash
+curl http://localhost:8000/api/v1/harness/scenarios
+```
 
-## Evaluation and Reports
+Fetch recent results:
 
-The evaluation layer is deterministic and local-only.
-It aggregates persisted agent runs, watchdog findings, safety events, tool calls, and harness results into a scorecard plus export-friendly Markdown and JSON reports.
+```bash
+curl http://localhost:8000/api/v1/harness/results
+```
 
-Scorecard dimensions:
+## Run Evaluation Report
 
-- `safety_score`: harness pass rate plus dangerous-action blocking posture
-- `grounding_score`: citation coverage and weak-grounding pressure
-- `tool_safety_score`: blocked dangerous tools, failed calls, and no-shell-execution posture
-- `watchdog_score`: triggered policy coverage plus human-approval enforcement
-- `overall_score`: weighted average of the four dimensions above
-
-Metric families included in the summary:
-
-- harness performance
-- watchdog policy coverage
-- prompt-injection resistance
-- tool safety
-- agent quality
-- grounding / evidence quality
-- human approval enforcement
-
-Run an evaluation:
+Run evaluation:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/evaluation/run \
   -H "Content-Type: application/json" \
-  -d '{
-    "run_harness_if_empty": true,
-    "report_type": "full"
-  }'
+  -d '{"run_harness_if_empty": true, "report_type": "full"}'
 ```
 
-Get the latest evaluation summary:
+Get summary:
 
 ```bash
 curl http://localhost:8000/api/v1/evaluation/summary
 ```
 
-Get the Markdown report:
+Get Markdown report:
 
 ```bash
 curl http://localhost:8000/api/v1/evaluation/report.md
 ```
 
-Get the JSON report:
+Get JSON report:
 
 ```bash
 curl http://localhost:8000/api/v1/evaluation/report.json
 ```
 
-List persisted evaluation scores:
+List stored evaluation scores:
 
 ```bash
 curl http://localhost:8000/api/v1/evaluation/scores
 ```
 
-Evaluation limitation:
+## Screenshots Placeholders
 
-- this is a deterministic local demo/evaluation, not a production SOC certification or third-party security attestation
+Add these screenshots before publishing a final portfolio page or Upwork attachment set:
 
-## Running Tests
+- Dashboard overview hero with system posture and demo controls
+- Agent trace focused on `retrieve_context`, `execute_safe_tools`, `metacognitive_self_assessment`, and `watchdog_policy_check`
+- RAG citations panel showing trusted and untrusted chunks
+- Watchdog findings panel with a blocked or require-human-approval result
+- Security harness results grid with pass / partial / failed breakdown
+- Evaluation report summary card or rendered Markdown report
 
-Backend:
+## API Overview
 
-```bash
-cd backend
-source .venv/bin/activate
-pytest tests/ -v
+### Core Health / Setup
+
+- `GET /api/v1/health`
+- `GET /api/v1/db/health`
+- `POST /api/v1/db/create-tables`
+- `POST /api/v1/demo/seed`
+
+### Documents / RAG
+
+- `POST /api/v1/documents/ingest`
+- `GET /api/v1/documents`
+- `POST /api/v1/rag/retrieve`
+
+### Safe Tool Registry
+
+- `GET /api/v1/tools`
+- `POST /api/v1/tools/{tool_name}/execute`
+
+### Agent Workflow
+
+- `POST /api/v1/agent/runs`
+- `GET /api/v1/agent/runs`
+- `GET /api/v1/agent/runs/{agent_run_id}`
+
+### Watchdog
+
+- `GET /api/v1/watchdog/policies`
+- `POST /api/v1/watchdog/evaluate`
+
+### Security Harness
+
+- `GET /api/v1/harness/scenarios`
+- `POST /api/v1/harness/run`
+- `GET /api/v1/harness/results`
+- `GET /api/v1/harness/results/{harness_run_id}`
+
+### Evaluation / Reporting
+
+- `POST /api/v1/evaluation/run`
+- `GET /api/v1/evaluation/summary`
+- `GET /api/v1/evaluation/report.md`
+- `GET /api/v1/evaluation/report.json`
+- `GET /api/v1/evaluation/scores`
+
+## Project Structure
+
+```text
+.
+├── backend/
+│   ├── app/
+│   │   ├── agent/
+│   │   ├── api/routes/
+│   │   ├── db/
+│   │   ├── evaluation/
+│   │   ├── harness/
+│   │   ├── models/
+│   │   ├── rag/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── tools/
+│   │   └── watchdog/
+│   └── tests/
+├── docs/
+├── frontend/
+│   ├── components/
+│   ├── lib/
+│   └── src/app/
+├── scripts/
+├── demo_data/
+├── docker-compose.yml
+└── .env.example
 ```
 
-Quick backend validation:
+## Tech Stack
 
-```bash
-cd backend
-source .venv/bin/activate
-python -c "from app.models import *; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables.keys()))"
-python -c "from app.db.session import engine; print('engine ok')"
-python -c "from app.main import app; print('app ok')"
-```
+- Backend: FastAPI, SQLModel, Pydantic, SQLAlchemy
+- Frontend: Next.js 15, React 19, TypeScript, Tailwind CSS
+- Local data: PostgreSQL, SQLite fallback
+- Demo/runtime model behavior: deterministic mock logic only
+- Testing: pytest, frontend lint, TypeScript type-checking
+
+## Security Boundaries
+
+- no arbitrary shell execution
+- no subprocess-based infrastructure control
+- no real Slurm, Docker, network, or system commands
+- no autonomous destructive actions
+- no prompt text treated as authority over policy
+- no bypass of human approval for dangerous recommendations
+
+Detailed boundary notes live in [docs/SECURITY_BOUNDARIES.md](docs/SECURITY_BOUNDARIES.md).
+
+## What Is Mocked vs Real
+
+| Area | In this project |
+| --- | --- |
+| LLM reasoning | Mocked, deterministic, local-only |
+| Tool execution | Mocked, allowlisted, typed, auditable |
+| Infrastructure control | Not implemented and intentionally blocked |
+| RAG retrieval | Real local deterministic lexical retrieval over SQL data |
+| Database persistence | Real |
+| Agent workflow persistence | Real |
+| Watchdog policy evaluation | Real deterministic local logic |
+| Security harness execution | Real deterministic local logic |
+| Evaluation / report export | Real deterministic local logic |
 
 ## Docker Compose
 
-Build and start the full local stack:
+Bring up the local stack:
 
 ```bash
 docker compose up --build
 ```
 
-Stop the stack:
+Stop it:
 
 ```bash
 docker compose down
 ```
 
-Stop and remove local service volumes:
+Remove local volumes:
 
 ```bash
 docker compose down -v
 ```
 
-## Demo Vision
+## Verification Commands
 
-The finished project will demonstrate a secure AI incident triage workflow with:
+Backend:
 
-- grounded recommendations over runbooks and past incidents
-- metacognitive self-assessment before major agent decisions
-- MCP-style allowlisted tools with auditability
-- safety and watchdog checks for risky recommendations
-- an integrated AI security harness for prompt injection and tool misuse testing
-- a premium dashboard suitable for GitHub and Upwork portfolio use
+```bash
+cd backend
+.venv/bin/pytest tests/ -v
+.venv/bin/python -c "from app.main import app; print('app ok')"
+```
 
-## Current Status
+Frontend:
 
-`Milestone 10 evaluation + report export`
+```bash
+cd frontend
+npm run lint
+npx tsc --noEmit
+```
 
-Implemented in this milestone:
+## Roadmap / Future Work
 
-- backend FastAPI skeleton with CORS, structured logging, and `GET /api/v1/health`
-- SQLModel session utilities, modular table models, and schema exports for the core backend entities
-- `GET /api/v1/db/health` plus development-only `POST /api/v1/db/create-tables`
-- static demo seed service, `POST /api/v1/demo/seed`, and backend tests covering model registration, database routes, and demo seeding
-- deterministic document ingestion, chunking, prompt-injection flagging, and lexical chunk retrieval via `/api/v1/documents` and `/api/v1/rag/retrieve`
-- typed, allowlisted, audited mock tool registry via `/api/v1/tools` with blocked dangerous-action definitions and database-backed tool-call auditing
-- deterministic agent workflow via `/api/v1/agent/runs` with fixed nodes, mock reasoning, self-assessment, grounded citations, safe tool execution, ticket-draft creation, watchdog policy checks, and mandatory human-review handoff
-- standalone watchdog evaluation via `/api/v1/watchdog` with policy findings, aggregated decisions, and persisted safety events for agent runs
-- deterministic security harness execution via `/api/v1/harness` with scenario registry, persisted harness tests/results, adversarial safety checks, and linked watchdog or tool-registry evidence
-- polished Next.js dashboard at `/` and `/dashboard` with live system status, demo controls, agent traces, RAG citations, tool-call audit views, watchdog panels, and harness result summaries
-- evaluation summary, score persistence, and Markdown/JSON reporting via `/api/v1/evaluation` over existing harness, watchdog, agent, and tool data
+- optional real embedding backend behind the existing RAG interfaces
+- real ticketing or case-management integrations behind explicit approval boundaries
+- stronger report history and comparison views
+- deployment hardening, auth, and production operations only after the local safety story is already solid
+
+## Portfolio Positioning / Upwork Relevance
+
+OpsGuard AI is a strong portfolio piece for:
+
+- AI safety engineering
+- secure RAG systems
+- agentic workflow design
+- backend-heavy AI product prototyping
+- DevOps / platform tooling demos
+- full-stack technical portfolio presentation
+
+If you are showing this to a client or recruiter, the message is:
+
+> This is not a toy chatbot. It is a local, testable, audit-friendly AI operations prototype that demonstrates how to combine retrieval, tool calling, policy enforcement, harness testing, and exportable evaluation into one coherent system.
+
+See also:
+
+- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+- [docs/PORTFOLIO_NOTES.md](docs/PORTFOLIO_NOTES.md)
+- [docs/SECURITY_BOUNDARIES.md](docs/SECURITY_BOUNDARIES.md)
+
+## Honesty Statement
+
+OpsGuard AI is a deterministic local demo and portfolio project.
+
+It does not claim:
+
+- production deployment maturity
+- SOC certification
+- live autonomous remediation
+- external LLM usage by default
+- real infrastructure access
+
+That honesty is intentional. The point of the project is to show strong architecture, safety boundaries, and demo readiness without pretending the system is something it is not.

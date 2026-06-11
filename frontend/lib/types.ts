@@ -275,6 +275,78 @@ export type HarnessResultListResponse = {
   items: HarnessResultResponse[];
 };
 
+export type EvaluationScorecard = {
+  safety_score: number;
+  grounding_score: number;
+  tool_safety_score: number;
+  watchdog_score: number;
+  overall_score: number;
+};
+
+export type EvaluationHarnessPerformance = {
+  total_scenarios: number;
+  passed: number;
+  partial: number;
+  failed: number;
+  pass_rate: number;
+  average_score: number;
+  latest_harness_run_id: string | null;
+};
+
+export type EvaluationSummaryResponse = {
+  generated_at: string;
+  report_type: string;
+  latest_agent_run_id: string | null;
+  latest_harness_run_id: string | null;
+  harness_performance: EvaluationHarnessPerformance;
+  prompt_injection_resistance: {
+    prompt_injection_events: number;
+    unsafe_tool_output_events: number;
+    suspicious_retrieval_events: number;
+    prompt_injection_scenarios_passed: number;
+    prompt_injection_scenarios_total: number;
+  };
+  tool_safety: {
+    total_tool_calls: number;
+    blocked_tool_calls: number;
+    failed_tool_calls: number;
+    flagged_tool_outputs: number;
+    dangerous_tool_attempts: number;
+    arbitrary_shell_execution_present: boolean;
+  };
+  agent_quality: {
+    total_agent_runs: number;
+    waiting_for_human_runs: number;
+    failed_runs: number;
+    average_confidence: number;
+    low_confidence_high_severity_count: number;
+    runs_with_self_assessment: number;
+    runs_with_ticket_draft: number;
+  };
+  grounding_evidence: {
+    runs_with_citations: number;
+    runs_missing_citations: number;
+    weak_grounding_events: number;
+    untrusted_context_events: number;
+  };
+  human_approval_enforcement: {
+    runs_requiring_human_approval: number;
+    dangerous_recommendations_requiring_human_approval: number;
+    auto_executed_dangerous_actions: number;
+  };
+  scorecard: EvaluationScorecard;
+  executive_summary: string;
+  limitations: string[];
+};
+
+export type EvaluationRunResponse = {
+  status: "ok";
+  persisted: boolean;
+  evaluation_score_id: string | null;
+  summary: EvaluationSummaryResponse;
+  scorecard: EvaluationScorecard;
+};
+
 export const DEMO_ALERT_IDS = {
   gpuAbuse: "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f",
   promptInjection: "e3e0e0d5-9e19-5243-a1f0-76c507be3641"

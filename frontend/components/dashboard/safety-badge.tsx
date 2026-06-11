@@ -25,10 +25,11 @@ const toneMap: Array<{
         "untrusted",
         "investigating",
         "open",
-        "allow with warnings"
+        "allow with warnings",
+        "allow_with_warnings"
       ].some((token) => value.includes(token)),
     className:
-      "border-warning/30 bg-warning/10 text-amber-100"
+      "border-warning/30 bg-warning/10 text-amber-50"
   },
   {
     match: (value) =>

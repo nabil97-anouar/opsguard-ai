@@ -6,6 +6,8 @@ import type {
   BackendErrorPayload,
   DemoSeedResponse,
   DocumentListItem,
+  EvaluationRunResponse,
+  EvaluationSummaryResponse,
   HarnessResultListResponse,
   HarnessRunResponse,
   HarnessScenarioListResponse,
@@ -152,4 +154,21 @@ export async function getHarnessRunResults(
   harnessRunId: string
 ): Promise<HarnessRunResponse> {
   return request<HarnessRunResponse>(`/harness/results/${harnessRunId}`);
+}
+
+export async function getEvaluationSummary(): Promise<EvaluationSummaryResponse> {
+  return request<EvaluationSummaryResponse>("/evaluation/summary");
+}
+
+export async function runEvaluation(
+  runHarnessIfEmpty = true,
+  reportType = "full"
+): Promise<EvaluationRunResponse> {
+  return request<EvaluationRunResponse>("/evaluation/run", {
+    method: "POST",
+    body: {
+      run_harness_if_empty: runHarnessIfEmpty,
+      report_type: reportType
+    }
+  });
 }

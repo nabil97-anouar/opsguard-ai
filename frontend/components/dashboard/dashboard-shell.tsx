@@ -16,6 +16,7 @@ import {
 import { AgentRunTrace } from "@/components/dashboard/agent-run-trace";
 import { AlertScenarioCard } from "@/components/dashboard/alert-scenario-card";
 import { DemoSeedCard } from "@/components/dashboard/demo-seed-card";
+import { EvaluationSummaryCard } from "@/components/dashboard/evaluation-summary-card";
 import { HarnessResultsPanel } from "@/components/dashboard/harness-results-panel";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { RagContextPanel } from "@/components/dashboard/rag-context-panel";
@@ -28,6 +29,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   getAgentRunDetail,
   getBackendHealth,
+  getEvaluationSummary,
   getErrorMessage,
   getHarnessRunResults,
   listAgentRuns,
@@ -38,6 +40,7 @@ import {
   listWatchdogPolicies,
   retrieveRagChunks,
   runAgent,
+  runEvaluation,
   runSecurityHarness,
   seedDemoData,
 } from "@/lib/api";
@@ -47,6 +50,7 @@ import {
   type AgentRunDetailResponse,
   type DemoSeedSummary,
   type DocumentListItem,
+  type EvaluationSummaryResponse,
   type HarnessRunResponse,
   type HarnessScenarioResponse,
   type HealthPayload,
@@ -162,6 +166,8 @@ export function DashboardShell() {
   const [agentRun, setAgentRun] = useState<AgentRunDetailResponse | null>(null);
   const [ragChunks, setRagChunks] = useState<RetrievalChunk[]>([]);
   const [harnessRun, setHarnessRun] = useState<HarnessRunResponse | null>(null);
+  const [evaluationSummary, setEvaluationSummary] =
+    useState<EvaluationSummaryResponse | null>(null);
   const [seedSummary, setSeedSummary] = useState<DemoSeedSummary | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -169,6 +175,7 @@ export function DashboardShell() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isRunningHarness, setIsRunningHarness] = useState(false);
+  const [isRunningEvaluation, setIsRunningEvaluation] = useState(false);
   const [runningScenario, setRunningScenario] = useState<ScenarioKind | null>(null);
 
   const trustedDocumentsCount = documents.filter(
@@ -302,17 +309,32 @@ export function DashboardShell() {
     return issues;
   }
 
+  async function loadEvaluationSnapshot(): Promise<string[]> {
+    const issues: string[] = [];
+
+    try {
+      const response = await getEvaluationSummary();
+      setEvaluationSummary(response);
+    } catch (error) {
+      issues.push(getErrorMessage(error));
+      setEvaluationSummary(null);
+    }
+
+    return issues;
+  }
+
   async function bootstrapDashboard(): Promise<void> {
     setIsBootstrapping(true);
     setErrorMessage(null);
 
-    const [referenceIssues, agentIssues, harnessIssues] = await Promise.all([
+    const [referenceIssues, agentIssues, harnessIssues, evaluationIssues] = await Promise.all([
       loadReferenceData(),
       loadLatestAgentActivity(),
       loadLatestHarnessActivity(),
+      loadEvaluationSnapshot(),
     ]);
 
-    const issues = [...referenceIssues, ...agentIssues, ...harnessIssues];
+    const issues = [...referenceIssues, ...agentIssues, ...harnessIssues, ...evaluationIssues];
 
     if (issues.length > 0) {
       setErrorMessage(issues[0]);
@@ -342,7 +364,12 @@ export function DashboardShell() {
     try {
       const response = await seedDemoData(false);
       setSeedSummary(response.summary);
-      await Promise.all([loadReferenceData(), loadLatestAgentActivity(), loadLatestHarnessActivity()]);
+      await Promise.all([
+        loadReferenceData(),
+        loadLatestAgentActivity(),
+        loadLatestHarnessActivity(),
+        loadEvaluationSnapshot(),
+      ]);
       setStatusMessage("Demo data seeded. The local stack is ready for agent and harness scenarios.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -364,7 +391,7 @@ export function DashboardShell() {
       const runResponse = await runAgent(scenario.alertId);
       const detail = await getAgentRunDetail(runResponse.agent_run_id);
       await applyAgentRunDetail(detail, scenario.label);
-      await loadReferenceData();
+      await Promise.all([loadReferenceData(), loadEvaluationSnapshot()]);
       setStatusMessage(
         `${scenario.label} completed with status ${detail.status}. Human approval is still required before any risky action can progress.`
       );
@@ -383,7 +410,7 @@ export function DashboardShell() {
     try {
       const response = await runSecurityHarness(null, true);
       setHarnessRun(response);
-      await loadReferenceData();
+      await Promise.all([loadReferenceData(), loadEvaluationSnapshot()]);
       if (!agentRun) {
         await loadLatestAgentActivity();
       }
@@ -394,6 +421,25 @@ export function DashboardShell() {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setIsRunningHarness(false);
+    }
+  }
+
+  async function handleRunEvaluation(): Promise<void> {
+    setIsRunningEvaluation(true);
+    setErrorMessage(null);
+    setStatusMessage("Calculating the deterministic evaluation summary and refreshing exportable reports…");
+
+    try {
+      const response = await runEvaluation(true, "full");
+      setEvaluationSummary(response.summary);
+      await loadLatestHarnessActivity();
+      setStatusMessage(
+        `Evaluation ready. Overall score ${response.scorecard.overall_score.toFixed(1)} with ${response.summary.harness_performance.total_scenarios} harness scenarios in scope.`
+      );
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsRunningEvaluation(false);
     }
   }
 
@@ -696,6 +742,15 @@ export function DashboardShell() {
           harnessRun={harnessRun}
           isLoading={isBootstrapping || isRunningHarness}
           scenarios={harnessScenarios}
+        />
+      </section>
+
+      <section className="grid gap-6">
+        <EvaluationSummaryCard
+          isLoading={isBootstrapping}
+          isRunningEvaluation={isRunningEvaluation}
+          onRunEvaluation={handleRunEvaluation}
+          summary={evaluationSummary}
         />
       </section>
 
