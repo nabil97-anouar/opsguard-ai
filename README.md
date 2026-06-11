@@ -23,6 +23,7 @@ Milestone 5 adds a typed, allowlisted, audited safe tool registry with determini
 Milestone 6 adds a deterministic backend agent workflow with a local mock LLM, fixed graph nodes, metacognitive self-assessment, RAG evidence retrieval, and safe-tool execution that always ends in human review.
 Milestone 7 adds an independently testable watchdog safety layer that evaluates recommendations, suspicious context, confidence, and grounding before agent output is considered safe for human review.
 Milestone 8 adds a deterministic security harness runner that exercises adversarial scenarios across RAG, tools, the agent workflow, and watchdog policies, then persists structured results.
+Milestone 9 adds the polished frontend dashboard that presents seeded incidents, agent traces, grounded citations, watchdog findings, and harness evidence as a premium local demo.
 
 ## Local Setup
 
@@ -539,13 +540,65 @@ Harness guarantees:
 - no autonomous remediation; the harness only evaluates and records system behavior
 - reproducible, database-backed results suitable for local demos and automated tests
 
-Frontend:
+## Frontend Dashboard
+
+The dashboard is the polished local demo surface for OpsGuard AI.
+It shows the system end to end: incident overview, deterministic agent runs, RAG citations, allowlisted tool calls, watchdog safety findings, security harness scores, and the mandatory human-approval boundary.
+
+Start the backend:
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Start the frontend:
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+Seed demo data from the UI or via API:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/demo/seed \
+  -H "Content-Type: application/json" \
+  -d '{"reset": false}'
+```
+
+Run a demo agent scenario directly:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
+  }'
+```
+
+Run the security harness:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/harness/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_ids": null,
+    "reset_demo_data": true
+  }'
+```
+
+What the dashboard demonstrates:
+
+- incident and alert overview for the seeded GPU abuse, SSH brute-force, storage pressure, and prompt-injection scenarios
+- deterministic agent trace nodes including retrieval, safe-tool execution, self-assessment, watchdog review, and wait-for-human-approval
+- RAG citations with provenance, trust labels, scores, and prompt-injection flags
+- audited tool calls with safe or blocked posture and structured output previews
+- watchdog findings with severity, remediation, and evidence references
+- harness scenario scores with pass / failed / partial status and linked safety-event evidence
+- a clear AI safety story: no real infrastructure control, no arbitrary shell execution, and no autonomous destructive actions
 
 ## Running Tests
 
@@ -600,7 +653,7 @@ The finished project will demonstrate a secure AI incident triage workflow with:
 
 ## Current Status
 
-`Milestone 8 security harness runner`
+`Milestone 9 frontend dashboard`
 
 Implemented in this milestone:
 
@@ -613,3 +666,4 @@ Implemented in this milestone:
 - deterministic agent workflow via `/api/v1/agent/runs` with fixed nodes, mock reasoning, self-assessment, grounded citations, safe tool execution, ticket-draft creation, watchdog policy checks, and mandatory human-review handoff
 - standalone watchdog evaluation via `/api/v1/watchdog` with policy findings, aggregated decisions, and persisted safety events for agent runs
 - deterministic security harness execution via `/api/v1/harness` with scenario registry, persisted harness tests/results, adversarial safety checks, and linked watchdog or tool-registry evidence
+- polished Next.js dashboard at `/` and `/dashboard` with live system status, demo controls, agent traces, RAG citations, tool-call audit views, watchdog panels, and harness result summaries

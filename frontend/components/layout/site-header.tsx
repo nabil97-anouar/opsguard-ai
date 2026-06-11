@@ -6,8 +6,10 @@ import { API_BASE_URL } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", label: "Overview" },
-  { href: "/dashboard", label: "Dashboard" }
+  { href: "/#overview", label: "Overview" },
+  { href: "/#controls", label: "Scenarios" },
+  { href: "/#traces", label: "Trace" },
+  { href: "/#harness", label: "Harness" },
 ];
 
 export function SiteHeader() {
@@ -23,7 +25,7 @@ export function SiteHeader() {
               OpsGuard AI
             </p>
             <p className="text-sm text-slate-400">
-              Secure agentic incident triage scaffold
+              Secure self-aware incident triage
             </p>
           </div>
         </Link>
@@ -51,7 +53,7 @@ export function SiteHeader() {
           >
             API Health
           </a>
-          <Link className={buttonVariants()} href="/dashboard">
+          <Link className={buttonVariants()} href="/#controls">
             Launch Demo
           </Link>
         </div>
