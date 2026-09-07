@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from typing import Any
-
 from app.agent.state import AgentState, BlockedToolRecommendation, PlannedToolCall
 
 
-def _node_from_state(state: AgentState) -> str:
-    return str((state.alert_summary.raw_data if state.alert_summary else {}).get("node") or "gpu-node-14")
-
-
-def _job_id_from_state(state: AgentState) -> str:
-    return str((state.alert_summary.raw_data if state.alert_summary else {}).get("job_id") or "unknown-job")
+def _target_from_state(state: AgentState, field: str) -> str | None:
+    value = (state.alert_summary.raw_data if state.alert_summary else {}).get(field)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if field == "job_id" and isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    gap = f"Alert does not identify a valid {field}; target-specific checks and actions were omitted."
+    if field not in state.missing_targets:
+        state.missing_targets.append(field)
+    if gap not in state.missing_evidence:
+        state.missing_evidence.append(gap)
+    return None
 
 
 def plan_tools_for_state(state: AgentState) -> tuple[list[PlannedToolCall], list[BlockedToolRecommendation]]:
@@ -18,17 +22,18 @@ def plan_tools_for_state(state: AgentState) -> tuple[list[PlannedToolCall], list
     alert = state.alert_summary
     description = alert.description if alert else ""
     title = alert.title if alert else ""
-    node = _node_from_state(state)
-    job_id = _job_id_from_state(state)
-
     if alert_type == "suspicious_gpu_usage":
-        return (
-            [
-                PlannedToolCall(
-                    tool_name="search_logs",
-                    input={"query": f"{title} xmrig mining pool {node}", "limit": 5},
-                    rationale="Look for xmrig, pool traffic, and suspicious process evidence in seeded logs.",
-                ),
+        node = _target_from_state(state, "node")
+        job_id = _target_from_state(state, "job_id")
+        tools = [
+            PlannedToolCall(
+                tool_name="search_logs",
+                input={"query": f"{title} xmrig mining pool {node or ''}".strip(), "limit": 5},
+                rationale="Look for xmrig, pool traffic, and suspicious process evidence in local logs.",
+            ),
+        ]
+        if node is not None:
+            tools.extend([
                 PlannedToolCall(
                     tool_name="get_node_metrics",
                     input={"node": node},
@@ -44,27 +49,35 @@ def plan_tools_for_state(state: AgentState) -> tuple[list[PlannedToolCall], list
                     input={"node": node, "limit": 10},
                     rationale="Look for suspicious outbound connections such as mining-pool ports.",
                 ),
-                PlannedToolCall(
-                    tool_name="retrieve_runbook",
-                    input={"query": "gpu abuse suspicious process xmrig outbound connections", "limit": 3, "include_untrusted": False},
-                    rationale="Retrieve trusted runbook guidance for GPU-abuse response.",
-                ),
-            ],
-            [
+            ])
+        tools.append(
+            PlannedToolCall(
+                tool_name="retrieve_runbook",
+                input={"query": "gpu abuse suspicious process xmrig outbound connections", "limit": 3, "include_untrusted": False},
+                rationale="Retrieve trusted runbook guidance for GPU-abuse response.",
+            )
+        )
+        blocked: list[BlockedToolRecommendation] = []
+        if job_id is not None:
+            blocked.append(
                 BlockedToolRecommendation(
                     tool_name="cancel_job",
                     target=job_id,
                     rationale="Canceling the suspicious job may be necessary, but only with human approval after evidence review.",
-                ),
+                )
+            )
+        if node is not None:
+            blocked.append(
                 BlockedToolRecommendation(
                     tool_name="isolate_node",
                     target=node,
                     rationale="Isolating the node is potentially disruptive and must remain a human-approved action.",
-                ),
-            ],
-        )
+                )
+            )
+        return tools, blocked
 
     if alert_type == "ssh_bruteforce":
+        user = _target_from_state(state, "user")
         return (
             [
                 PlannedToolCall(
@@ -86,10 +99,10 @@ def plan_tools_for_state(state: AgentState) -> tuple[list[PlannedToolCall], list
             [
                 BlockedToolRecommendation(
                     tool_name="block_user",
-                    target="root/admin",
+                    target=user,
                     rationale="Disabling user access is disruptive and requires explicit human approval.",
                 )
-            ],
+            ] if user is not None else [],
         )
 
     if alert_type == "storage_inode_pressure":
@@ -128,18 +141,7 @@ def plan_tools_for_state(state: AgentState) -> tuple[list[PlannedToolCall], list
                     rationale="Check whether seeded indexer logs show suspicious override markers.",
                 ),
             ],
-            [
-                BlockedToolRecommendation(
-                    tool_name="cancel_job",
-                    target="cluster-wide",
-                    rationale="The malicious content recommends canceling jobs, but that action must remain blocked pending human review.",
-                ),
-                BlockedToolRecommendation(
-                    tool_name="disable_service",
-                    target="safety controls",
-                    rationale="Any proposal to disable safety controls must be rejected and kept recommendation-only.",
-                ),
-            ],
+            [],
         )
 
     return (

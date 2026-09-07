@@ -1,52 +1,10 @@
 import { cn } from "@/lib/utils";
+import { badgeToneClasses, safetyBadgeTone } from "@/lib/safety-status";
 
 type SafetyBadgeProps = {
   value: string;
   className?: string;
 };
-
-const toneMap: Array<{
-  match: (value: string) => boolean;
-  className: string;
-}> = [
-  {
-    match: (value) =>
-      ["passed", "healthy", "trusted", "clean", "allow", "executed", "configured"].some(
-        (token) => value.includes(token)
-      ),
-    className:
-      "border-success/30 bg-success/10 text-success"
-  },
-  {
-    match: (value) =>
-      [
-        "warning",
-        "partial",
-        "untrusted",
-        "investigating",
-        "open",
-        "allow with warnings",
-        "allow_with_warnings"
-      ].some((token) => value.includes(token)),
-    className:
-      "border-warning/30 bg-warning/10 text-amber-50"
-  },
-  {
-    match: (value) =>
-      [
-        "block",
-        "blocked",
-        "failed",
-        "critical",
-        "danger",
-        "suspicious",
-        "require human",
-        "high"
-      ].some((token) => value.includes(token)),
-    className:
-      "border-critical/30 bg-critical/10 text-red-100"
-  }
-];
 
 function humanize(value: string): string {
   return value
@@ -55,9 +13,7 @@ function humanize(value: string): string {
 }
 
 export function SafetyBadge({ value, className }: SafetyBadgeProps) {
-  const normalized = value.trim().toLowerCase();
-  const tone = toneMap.find((item) => item.match(normalized))?.className ??
-    "border-white/10 bg-white/[0.05] text-slate-200";
+  const tone = badgeToneClasses[safetyBadgeTone(value)];
 
   return (
     <span

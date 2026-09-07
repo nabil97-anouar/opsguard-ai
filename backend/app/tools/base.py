@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, TypeAlias
+from typing import Any, Callable, Literal, TypeAlias
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlmodel import Session
+
+from app.rag.trust import TrustLevel
 
 ToolInput: TypeAlias = dict[str, Any]
 ToolResult: TypeAlias = dict[str, Any]
@@ -26,13 +28,18 @@ class ToolExecutionContext:
 
 @dataclass(frozen=True)
 class ToolExecutionResult:
-    status: str
+    status: Literal["executed", "failed", "blocked"]
     tool_name: str
-    trust_level: str
+    trust_level: TrustLevel
     requires_human_approval: bool
     output: ToolResult
     error: str | None
     created_at: datetime
+    tool_call_id: UUID | None = None
+
+    @property
+    def outcome(self) -> Literal["succeeded", "failed", "blocked"]:
+        return "succeeded" if self.status == "executed" else self.status
 
 
 @dataclass(frozen=True)
@@ -41,9 +48,13 @@ class ToolDefinition:
     description: str
     input_schema: type[BaseModel]
     output_schema: type[BaseModel]
-    trust_level: str
+    trust_level: TrustLevel
     allowed_use: tuple[str, ...]
     blocked_use: tuple[str, ...]
     requires_human_approval: bool
     is_destructive: bool
-    handler: ToolHandler
+    handler: ToolHandler | None
+
+    @property
+    def executable(self) -> bool:
+        return self.handler is not None and not self.is_destructive and not self.requires_human_approval

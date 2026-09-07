@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.orm import validates
 from sqlmodel import Field
 
 from app.models.base import CreatedAtMixin, UUIDPrimaryKeyMixin, UpdatedAtMixin, json_column
@@ -23,6 +24,12 @@ class Document(UUIDPrimaryKeyMixin, UpdatedAtMixin, table=True):
     chunk_count: int = 0
     injection_scan_result: str = Field(default="pending", max_length=20, index=True)
 
+    @validates("trust_level")
+    def validate_trust_level(self, _key: str, value: str) -> str:
+        from app.rag.trust import TrustLevel
+
+        return TrustLevel(value).value
+
 
 class DocumentChunk(UUIDPrimaryKeyMixin, CreatedAtMixin, table=True):
     __tablename__ = "document_chunks"
@@ -38,3 +45,9 @@ class DocumentChunk(UUIDPrimaryKeyMixin, CreatedAtMixin, table=True):
     )
     trust_level: str = Field(default="untrusted", max_length=20, index=True)
     injection_scan_result: str = Field(default="pending", max_length=20)
+
+    @validates("trust_level")
+    def validate_trust_level(self, _key: str, value: str) -> str:
+        from app.rag.trust import TrustLevel
+
+        return TrustLevel(value).value

@@ -11,6 +11,9 @@ type ToolCallsPanelProps = {
 };
 
 function summarizeToolOutput(toolCall: ToolCall): string {
+  if (toolCall.status === "failed" || toolCall.status === "blocked") {
+    return toolCall.error_message ?? "This attempt produced no supporting observation.";
+  }
   const output = toolCall.output;
   if (!output || typeof output !== "object") {
     return "Structured tool output was recorded for audit.";
@@ -54,10 +57,11 @@ export function ToolCallsPanel({
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
             Tool calls
           </p>
-          <CardTitle className="mt-3">Allowlisted, typed, auditable tools</CardTitle>
+          <CardTitle className="mt-3">Tool observations and attempts</CardTitle>
           <CardDescription className="mt-3">
             Every tool call shows execution status, trust level, injection scan
-            result, and a structured preview of the recorded output.
+            result, and a structured preview of the recorded output. Failed and
+            blocked attempts are audit records, not supporting evidence.
           </CardDescription>
         </div>
 
@@ -101,6 +105,9 @@ export function ToolCallsPanel({
                 <p className="mt-4 font-mono text-xs text-slate-400">
                   {new Date(toolCall.created_at).toLocaleString()} ·{" "}
                   {toolCall.duration_ms ?? 0} ms
+                </p>
+                <p className="mt-2 break-all font-mono text-xs text-slate-400">
+                  Tool call {toolCall.id}
                 </p>
               </div>
 

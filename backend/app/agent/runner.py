@@ -22,7 +22,7 @@ from app.agent.state import AgentState, AssessmentSnapshot, FinalRecommendation
 from app.models import AgentRun, AgentStep, Alert, SelfAssessment, ToolCall
 from app.models.base import utcnow
 
-RUNNER_MODEL_VERSION = "deterministic-mock-v1"
+RUNNER_MODEL_VERSION = "deterministic-mock-v2"
 
 
 def _ensure_aware(value: datetime) -> datetime:

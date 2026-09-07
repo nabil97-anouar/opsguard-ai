@@ -27,7 +27,7 @@ const scenarioCards = [
     key: "prompt" as const,
     title: "Prompt-injection poisoning",
     description:
-      "Exercises the poisoned runbook path, watchdog blocking, and human approval handoff.",
+      "Exercises poisoned runbook retrieval, watchdog findings, and the human review handoff.",
     alertId: DEMO_ALERT_IDS.promptInjection,
     severity: "critical",
     source: "rag-security-harness",
@@ -48,10 +48,10 @@ export function AlertScenarioCard({
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
             Agent scenarios
           </p>
-          <CardTitle className="mt-3">Launch premium demo paths</CardTitle>
+          <CardTitle className="mt-3">Run a sample investigation</CardTitle>
           <CardDescription className="mt-3">
-            Each scenario uses stable seeded IDs, grounded retrieval, safe tools,
-            and watchdog policy checks before the run enters human review.
+            Each scenario combines runbook retrieval, typed local tools, and
+            watchdog checks. Completed investigations end at a manual review handoff.
           </CardDescription>
         </div>
 

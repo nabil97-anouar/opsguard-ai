@@ -1,1 +1,1 @@
-"""Safety package placeholder for Milestone 7."""
+"""Reserved namespace; current policy checks live in app.watchdog."""

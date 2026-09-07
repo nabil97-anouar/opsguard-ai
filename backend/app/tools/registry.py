@@ -4,10 +4,10 @@ from functools import lru_cache
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.models.base import utcnow
+from app.rag.trust import TrustLevel
 from app.tools.audit import elapsed_ms, record_dangerous_tool_attempt, record_tool_call, start_timer
 from app.tools.base import ToolDefinition, ToolExecutionContext, ToolExecutionResult, UnknownToolError
 from app.tools.implementations import (
@@ -53,7 +53,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Search deterministic mock logs for alert-related terms.",
             input_schema=SearchLogsInput,
             output_schema=SearchLogsOutput,
-            trust_level="untrusted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=(
                 "Search seeded operational logs for incident evidence.",
                 "Use for bounded, read-only query exploration.",
@@ -71,7 +71,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Return deterministic mock node and GPU metrics.",
             input_schema=GetNodeMetricsInput,
             output_schema=GetNodeMetricsOutput,
-            trust_level="untrusted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=(
                 "Inspect seeded node health and GPU utilization.",
                 "Use for point-in-time resource checks only.",
@@ -89,7 +89,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Return deterministic mock running jobs filtered by node or user.",
             input_schema=GetRunningJobsInput,
             output_schema=GetRunningJobsOutput,
-            trust_level="untrusted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=(
                 "Inspect seeded running jobs for triage context.",
                 "Filter by node or user in read-only mode.",
@@ -107,7 +107,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Return deterministic mock outbound network connections for a node.",
             input_schema=CheckNetworkConnectionsInput,
             output_schema=CheckNetworkConnectionsOutput,
-            trust_level="untrusted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=(
                 "Inspect seeded outbound connection metadata for a single node.",
                 "Use for read-only risk triage.",
@@ -125,7 +125,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Query stored incident rows using deterministic lexical matching.",
             input_schema=QueryPastIncidentsInput,
             output_schema=QueryPastIncidentsOutput,
-            trust_level="trusted",
+            trust_level=TrustLevel.TRUSTED,
             allowed_use=(
                 "Search historical incidents already stored in the local database.",
                 "Use for grounding against prior resolutions and root causes.",
@@ -143,7 +143,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Retrieve runbook chunks through the existing local RAG retrieval service.",
             input_schema=RetrieveRunbookInput,
             output_schema=RetrieveRunbookOutput,
-            trust_level="untrusted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=(
                 "Retrieve grounded runbook chunks with citations and trust metadata.",
                 "Exclude untrusted documents by default.",
@@ -161,7 +161,7 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Create an internal TicketDraft row without calling any external system.",
             input_schema=CreateTicketDraftInput,
             output_schema=CreateTicketDraftOutput,
-            trust_level="trusted",
+            trust_level=TrustLevel.TRUSTED,
             allowed_use=(
                 "Persist internal draft tickets linked to an existing agent run.",
                 "Use for human-reviewed follow-up only.",
@@ -179,60 +179,60 @@ def _build_registry() -> dict[str, ToolDefinition]:
             description="Blocked dangerous action definition for canceling a running job.",
             input_schema=DangerousToolInput,
             output_schema=BlockedToolOutput,
-            trust_level="restricted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=("Recommendation only after explicit human approval.",),
             blocked_use=("Direct execution is never allowed by this registry.",),
             requires_human_approval=True,
             is_destructive=True,
-            handler=blocked_tool_handler,
+            handler=None,
         ),
         "drain_node": ToolDefinition(
             name="drain_node",
             description="Blocked dangerous action definition for removing a node from scheduling.",
             input_schema=DangerousToolInput,
             output_schema=BlockedToolOutput,
-            trust_level="restricted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=("Recommendation only after explicit human approval.",),
             blocked_use=("Direct execution is never allowed by this registry.",),
             requires_human_approval=True,
             is_destructive=True,
-            handler=blocked_tool_handler,
+            handler=None,
         ),
         "block_user": ToolDefinition(
             name="block_user",
             description="Blocked dangerous action definition for revoking user access.",
             input_schema=DangerousToolInput,
             output_schema=BlockedToolOutput,
-            trust_level="restricted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=("Recommendation only after explicit human approval.",),
             blocked_use=("Direct execution is never allowed by this registry.",),
             requires_human_approval=True,
             is_destructive=True,
-            handler=blocked_tool_handler,
+            handler=None,
         ),
         "isolate_node": ToolDefinition(
             name="isolate_node",
             description="Blocked dangerous action definition for isolating a node.",
             input_schema=DangerousToolInput,
             output_schema=BlockedToolOutput,
-            trust_level="restricted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=("Recommendation only after explicit human approval.",),
             blocked_use=("Direct execution is never allowed by this registry.",),
             requires_human_approval=True,
             is_destructive=True,
-            handler=blocked_tool_handler,
+            handler=None,
         ),
         "disable_service": ToolDefinition(
             name="disable_service",
             description="Blocked dangerous action definition for disabling a service.",
             input_schema=DangerousToolInput,
             output_schema=BlockedToolOutput,
-            trust_level="restricted",
+            trust_level=TrustLevel.UNTRUSTED,
             allowed_use=("Recommendation only after explicit human approval.",),
             blocked_use=("Direct execution is never allowed by this registry.",),
             requires_human_approval=True,
             is_destructive=True,
-            handler=blocked_tool_handler,
+            handler=None,
         ),
     }
 
@@ -268,9 +268,9 @@ def execute_tool(
     validated_input = definition.input_schema.model_validate(input)
     input_payload = validated_input.model_dump(mode="json")
 
-    if definition.is_destructive:
-        blocked_output_model = definition.output_schema.model_validate(
-            definition.handler(validated_input, session, context)
+    if not definition.executable:
+        blocked_output_model = BlockedToolOutput.model_validate(
+            blocked_tool_handler(validated_input, session, context)
         )
         blocked_output = blocked_output_model.model_dump(mode="json")
         duration_ms = elapsed_ms(started_at)
@@ -281,7 +281,7 @@ def execute_tool(
                 input_args=input_payload,
                 agent_run_id=context.agent_run_id,
             )
-            record_tool_call(
+            tool_call = record_tool_call(
                 session,
                 agent_run_id=context.agent_run_id,
                 step_id=context.step_id,
@@ -306,14 +306,16 @@ def execute_tool(
             output=blocked_output,
             error=None,
             created_at=created_at,
+            tool_call_id=tool_call.id if tool_call is not None else None,
         )
 
     try:
+        assert definition.handler is not None
         raw_output = definition.handler(validated_input, session, context)
         validated_output = definition.output_schema.model_validate(raw_output)
         output_payload = validated_output.model_dump(mode="json")
         duration_ms = elapsed_ms(started_at)
-        record_tool_call(
+        tool_call = record_tool_call(
             session,
             agent_run_id=context.agent_run_id,
             step_id=context.step_id,
@@ -334,16 +336,15 @@ def execute_tool(
             output=output_payload,
             error=None,
             created_at=created_at,
+            tool_call_id=tool_call.id if tool_call is not None else None,
         )
-    except ValidationError:
-        session.rollback()
-        raise
     except Exception as exc:
         session.rollback()
         duration_ms = elapsed_ms(started_at)
         error_message = str(exc)
+        tool_call_id = None
         try:
-            record_tool_call(
+            tool_call = record_tool_call(
                 session,
                 agent_run_id=context.agent_run_id,
                 step_id=context.step_id,
@@ -356,6 +357,7 @@ def execute_tool(
                 error_message=error_message,
             )
             session.commit()
+            tool_call_id = tool_call.id if tool_call is not None else None
         except Exception:
             session.rollback()
 
@@ -367,4 +369,5 @@ def execute_tool(
             output={},
             error=error_message,
             created_at=created_at,
+            tool_call_id=tool_call_id,
         )

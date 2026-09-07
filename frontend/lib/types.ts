@@ -27,12 +27,14 @@ export type DemoSeedResponse = {
   summary: DemoSeedSummary;
 };
 
+export type TrustLevel = "trusted" | "untrusted" | "quarantined";
+
 export type DocumentListItem = {
   id: string;
   title: string;
   source: string;
   doc_type: string;
-  trust_level: string;
+  trust_level: TrustLevel;
   created_at: string;
 };
 
@@ -40,7 +42,7 @@ export type DocumentIngestRequest = {
   title: string;
   source: string;
   doc_type: string;
-  trust_level: string;
+  trust_level?: Exclude<TrustLevel, "trusted">;
   content: string;
   metadata?: Record<string, unknown> | null;
 };
@@ -55,12 +57,14 @@ export type DocumentIngestResponse = {
 };
 
 export type RetrievalChunk = {
+  evidence_id?: string;
+  observed_at?: string;
   document_id: string;
   chunk_id: string;
   title: string;
   source: string;
   chunk_index: number;
-  trust_level: string;
+  trust_level: TrustLevel;
   doc_type: string;
   score: number;
   content_excerpt: string;
@@ -73,7 +77,7 @@ export type RetrievalChunk = {
 export type RagRetrieveRequest = {
   query: string;
   limit?: number;
-  trust_filter?: string | null;
+  trust_filter?: TrustLevel | null;
   include_untrusted?: boolean;
 };
 
@@ -91,6 +95,7 @@ export type ToolListItem = {
   blocked_use: string[];
   requires_human_approval: boolean;
   is_destructive: boolean;
+  executable: boolean;
   input_schema: Record<string, unknown>;
   output_schema: Record<string, unknown>;
 };
@@ -139,9 +144,33 @@ export type WatchdogFinding = {
   metadata: Record<string, unknown>;
 };
 
+export type EvidenceItem = {
+  evidence_id: string;
+  kind: "alert" | "retrieval" | "tool_output";
+  source_type: "alert" | "document" | "tool";
+  source: string;
+  alert_id?: string | null;
+  document_id: string | null;
+  chunk_id: string | null;
+  tool_call_id: string | null;
+  retrieval_score: number | null;
+  trust_level: TrustLevel;
+  content: string | Record<string, unknown>;
+  observed_at: string;
+  summary: string;
+  citation: string;
+  suspicious: boolean;
+  title?: string | null;
+  chunk_index?: number | null;
+  doc_type?: string | null;
+  matched_patterns?: string[];
+  risk_level?: string;
+};
+
 export type FinalRecommendation = {
   summary: string;
-  evidence: Array<Record<string, unknown>>;
+  // Older stored runs may contain the previous, less complete evidence shape.
+  evidence: Array<EvidenceItem | Record<string, unknown>>;
   citations: string[];
   recommended_next_steps: string[];
   blocked_actions_requiring_human_approval: Array<Record<string, unknown>>;
@@ -350,17 +379,4 @@ export type EvaluationRunResponse = {
 export const DEMO_ALERT_IDS = {
   gpuAbuse: "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f",
   promptInjection: "e3e0e0d5-9e19-5243-a1f0-76c507be3641"
-} as const;
-
-export const DEMO_RAG_QUERIES = {
-  gpuAbuse: {
-    query: "gpu xmrig suspicious process mining pool",
-    limit: 5,
-    include_untrusted: false
-  },
-  promptInjection: {
-    query: "system override ignore policies poisoned runbook",
-    limit: 5,
-    include_untrusted: true
-  }
 } as const;

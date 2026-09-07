@@ -24,6 +24,7 @@ def list_tool_definitions() -> ToolListResponse:
             blocked_use=list(definition.blocked_use),
             requires_human_approval=definition.requires_human_approval,
             is_destructive=definition.is_destructive,
+            executable=definition.executable,
             input_schema=definition.input_schema.model_json_schema(),
             output_schema=definition.output_schema.model_json_schema(),
         )
@@ -59,6 +60,8 @@ def execute_tool_route(
 
     return ToolExecuteResponse(
         status=result.status,
+        outcome=result.outcome,
+        tool_call_id=result.tool_call_id,
         tool_name=result.tool_name,
         trust_level=result.trust_level,
         requires_human_approval=result.requires_human_approval,

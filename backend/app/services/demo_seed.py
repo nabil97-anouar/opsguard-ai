@@ -29,6 +29,7 @@ from app.models import (
     TicketDraft,
     ToolCall,
 )
+from app.rag.trust import effective_chunk_trust, ingestion_trust, resolve_effective_trust
 
 DEMO_NAMESPACE = UUID("6f2f7b60-741e-4ca0-8f09-f5dcf11c2a11")
 DEMO_BASE_TIME = datetime(2026, 5, 20, 8, 30, tzinfo=UTC)
@@ -252,6 +253,8 @@ def build_documents() -> tuple[list[DemoRecord], list[DemoRecord]]:
     chunks: list[DemoRecord] = []
 
     for spec in document_specs:
+        # Only fixed, repository-owned fixtures opt into trusted authority.
+        spec["trust_level"] = ingestion_trust(spec["trust_level"], None, allow_trusted=True).value
         document_id = demo_uuid(f"document:{spec['key']}")
         combined_content = "\n\n".join(chunk_text for _, chunk_text in spec["chunks"])
         documents.append(
@@ -1321,14 +1324,33 @@ def upsert_record(
     summary_key: str,
 ) -> Any:
     existing = session.get(model, record.id)
+    payload = dict(record.payload)
+    if model is Document and existing is not None:
+        payload["trust_level"] = resolve_effective_trust(
+            existing.trust_level, payload["trust_level"]
+        ).value
+    elif model is DocumentChunk:
+        document = session.get(Document, payload["document_id"])
+        payload["trust_level"] = resolve_effective_trust(
+            payload["trust_level"],
+            effective_chunk_trust(
+                document.trust_level if document else None,
+                existing.trust_level if existing is not None else payload["trust_level"],
+                existing.chunk_metadata if existing is not None else payload["chunk_metadata"],
+            ),
+        ).value
+        payload["chunk_metadata"] = {
+            **payload["chunk_metadata"], "trust_level": payload["trust_level"]
+        }
+
     if existing is None:
-        instance = model(id=record.id, **record.payload)
+        instance = model(id=record.id, **payload)
         session.add(instance)
         summary["created"][summary_key] += 1
         return instance
 
     changed = False
-    for field_name, field_value in record.payload.items():
+    for field_name, field_value in payload.items():
         if getattr(existing, field_name) != field_value:
             setattr(existing, field_name, field_value)
             changed = True

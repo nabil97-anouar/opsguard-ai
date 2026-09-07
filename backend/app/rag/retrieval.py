@@ -10,10 +10,23 @@ from sqlmodel import Session, select
 from app.models import Document, DocumentChunk
 from app.rag.injection import detect_prompt_injection
 from app.rag.schemas import ListedDocument, RetrievalResult
+from app.rag.trust import TrustLevel, effective_chunk_trust, resolve_effective_trust
+
+# Functional words cannot establish incident relevance by themselves. Domain
+# terms and identifiers remain unchanged; this is a deterministic lexical filter.
+_STOP_WORDS = frozenset(
+    "a about above after again against all am an and any are as at be because been "
+    "before being below between both but by can could did do does doing down during "
+    "each few for from further had has have he her here hers him his how i if in "
+    "into is it its itself just me more most must my no nor not now of off on once "
+    "only or other our ours out over own same she should so some such than that the "
+    "their them then there these they this those through to too under until up us "
+    "very was we were what when where which who why will with would you your".split()
+)
 
 
 def _tokenize(value: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", value.lower())
+    return [token for token in re.findall(r"[a-z0-9]+", value.lower()) if token not in _STOP_WORDS]
 
 
 def _build_metadata_text(document: Document, chunk: DocumentChunk) -> str:
@@ -42,6 +55,8 @@ def _score_chunk(query: str, document: Document, chunk: DocumentChunk) -> float:
     unique_overlap = len(
         {token for token in query_counter if content_counter[token] > 0 or metadata_counter[token] > 0}
     )
+    if unique_overlap == 0:
+        return 0.0
     phrase_boost = 0.0
 
     normalized_query = " ".join(query_tokens)
@@ -50,12 +65,11 @@ def _score_chunk(query: str, document: Document, chunk: DocumentChunk) -> float:
         " ".join(_tokenize(document.title)),
         " ".join(_tokenize(document.file_path or "")),
     ]
-    if any(normalized_query and normalized_query in haystack for haystack in haystacks):
+    if any(f" {normalized_query} " in f" {haystack} " for haystack in haystacks):
         phrase_boost = 1.5
 
-    trust_boost = 0.15 if document.trust_level == "trusted" else 0.0
     length_penalty = math.sqrt(max(len(content_counter), 1))
-    score = (content_score + metadata_score * 0.75 + unique_overlap * 0.5 + phrase_boost + trust_boost) / length_penalty
+    score = (content_score + metadata_score * 0.75 + unique_overlap * 0.5 + phrase_boost) / length_penalty
     return round(score, 4)
 
 
@@ -102,14 +116,16 @@ def _effective_scan(chunk: DocumentChunk) -> dict[str, Any]:
 
 
 def list_documents(session: Session) -> list[ListedDocument]:
-    documents = session.exec(select(Document).order_by(Document.created_at.desc())).all()
+    documents = session.exec(
+        select(Document).order_by(Document.created_at.desc()).execution_options(populate_existing=True)
+    ).all()
     return [
         ListedDocument(
             id=document.id,
             title=document.title,
             source=document.file_path or "",
             doc_type=document.source_type,
-            trust_level=document.trust_level,
+            trust_level=resolve_effective_trust(document.trust_level),
             created_at=document.created_at,
         )
         for document in documents
@@ -121,24 +137,29 @@ def retrieve_chunks(
     *,
     query: str,
     limit: int = 5,
-    trust_filter: str | None = None,
+    trust_filter: TrustLevel | str | None = None,
     include_untrusted: bool = True,
 ) -> list[RetrievalResult]:
     normalized_query = query.strip()
-    if not normalized_query:
+    normalized_filter = TrustLevel(trust_filter) if trust_filter is not None else None
+    if not _tokenize(normalized_query):
         return []
 
     statement = select(DocumentChunk, Document).join(Document, Document.id == DocumentChunk.document_id)
-    rows = session.exec(statement).all()
+    # A long-lived caller session must not reuse labels loaded before a demotion
+    # committed by another request. Snapshots already captured by runs stay intact.
+    rows = session.exec(statement.execution_options(populate_existing=True)).all()
     results: list[RetrievalResult] = []
 
     for chunk, document in rows:
-        effective_trust = chunk.trust_level or document.trust_level
-        if document.trust_level == "quarantined" or effective_trust == "quarantined":
+        effective_trust = effective_chunk_trust(
+            document.trust_level, chunk.trust_level, chunk.chunk_metadata
+        )
+        if effective_trust == TrustLevel.QUARANTINED:
             continue
-        if trust_filter and document.trust_level != trust_filter and effective_trust != trust_filter:
+        if normalized_filter is not None and effective_trust != normalized_filter:
             continue
-        if not include_untrusted and (document.trust_level != "trusted" or effective_trust != "trusted"):
+        if not include_untrusted and effective_trust != TrustLevel.TRUSTED:
             continue
 
         score = _score_chunk(normalized_query, document, chunk)
@@ -170,6 +191,8 @@ def retrieve_chunks(
             item.trust_level != "trusted",
             item.title.lower(),
             item.chunk_index,
+            str(item.document_id),
+            str(item.chunk_id),
         )
     )
     return results[:limit]

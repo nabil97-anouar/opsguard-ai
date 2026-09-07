@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     project_name: str = "OpsGuard AI"
     project_description: str = (
-        "Secure self-aware AI agents for incident triage and AI security testing."
+        "Incident triage with evidence retrieval, typed local tools, and safety-policy checks."
     )
     project_version: str = "0.1.0"
     environment: Literal["development", "staging", "production"] = "development"

@@ -1,1 +1,1 @@
-"""Metacognition package placeholder for Milestone 6."""
+"""Reserved namespace; current assessment logic lives in app.agent."""

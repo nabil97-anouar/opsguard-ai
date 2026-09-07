@@ -26,7 +26,7 @@ export function SiteHeader() {
               OpsGuard AI
             </p>
             <p className="text-sm text-slate-400">
-              Secure self-aware incident triage
+              Incident investigation and policy review
             </p>
           </div>
         </Link>
@@ -55,7 +55,7 @@ export function SiteHeader() {
             API Health
           </a>
           <Link className={buttonVariants()} href="/#controls">
-            Launch Demo
+            Run a scenario
           </Link>
         </div>
       </div>

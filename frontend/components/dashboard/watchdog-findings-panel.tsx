@@ -23,8 +23,8 @@ export function WatchdogFindingsPanel({
           </p>
           <CardTitle className="mt-3">Policy verdict before human review</CardTitle>
           <CardDescription className="mt-3">
-            Watchdog findings explain why a recommendation was allowed, warned,
-            gated for human approval, or blocked.
+            Inspect policy findings and their supporting references. An allow verdict
+            does not execute an action; investigations end at a manual review handoff.
           </CardDescription>
         </div>
 
@@ -44,7 +44,7 @@ export function WatchdogFindingsPanel({
 
         {findings.length === 0 ? (
           <p className="rounded-2xl border border-white/8 bg-ink/60 p-4 text-sm text-slate-300">
-            Run an agent scenario to inspect live watchdog findings and
+            Run an investigation to inspect watchdog findings and
             remediation guidance.
           </p>
         ) : null}

@@ -23,6 +23,7 @@ import { RagContextPanel } from "@/components/dashboard/rag-context-panel";
 import { SafetyBadge } from "@/components/dashboard/safety-badge";
 import { SystemStatusCard } from "@/components/dashboard/system-status-card";
 import { ToolCallsPanel } from "@/components/dashboard/tool-calls-panel";
+import { ToolRegistryGroups } from "@/components/dashboard/tool-registry-groups";
 import { WatchdogFindingsPanel } from "@/components/dashboard/watchdog-findings-panel";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,6 @@ import {
   listHarnessScenarios,
   listTools,
   listWatchdogPolicies,
-  retrieveRagChunks,
   runAgent,
   runEvaluation,
   runSecurityHarness,
@@ -46,7 +46,6 @@ import {
 } from "@/lib/api";
 import {
   DEMO_ALERT_IDS,
-  DEMO_RAG_QUERIES,
   type AgentRunDetailResponse,
   type DemoSeedSummary,
   type DocumentListItem,
@@ -54,11 +53,11 @@ import {
   type HarnessRunResponse,
   type HarnessScenarioResponse,
   type HealthPayload,
-  type RagRetrieveRequest,
   type RetrievalChunk,
   type ToolListItem,
   type WatchdogPolicyItem,
 } from "@/lib/types";
+import { loadRecordedAgentRun, recordedRetrievalChunks, toolRegistryGroups } from "@/lib/dashboard-data";
 
 type ScenarioKind = "gpu" | "prompt";
 
@@ -102,18 +101,15 @@ const scenarioMetadata: Record<
   {
     alertId: string;
     label: string;
-    query: RagRetrieveRequest;
   }
 > = {
   gpu: {
     alertId: DEMO_ALERT_IDS.gpuAbuse,
     label: "GPU abuse investigation",
-    query: DEMO_RAG_QUERIES.gpuAbuse,
   },
   prompt: {
     alertId: DEMO_ALERT_IDS.promptInjection,
     label: "Prompt-injection poisoning",
-    query: DEMO_RAG_QUERIES.promptInjection,
   },
 };
 
@@ -125,16 +121,6 @@ function scenarioLabelForAlertId(alertId: string): string | null {
     return scenarioMetadata.prompt.label;
   }
   return null;
-}
-
-function extractRetrievedChunks(agentRun: AgentRunDetailResponse | null): RetrievalChunk[] {
-  if (!agentRun) {
-    return [];
-  }
-
-  const retrievalStep = agentRun.steps.find((step) => step.node_name === "retrieve_context");
-  const results = retrievalStep?.output_snapshot.results;
-  return Array.isArray(results) ? (results as RetrievalChunk[]) : [];
 }
 
 function latestHarnessRunId(harnessRun: HarnessRunResponse | null): string | null {
@@ -181,38 +167,17 @@ export function DashboardShell() {
   const trustedDocumentsCount = documents.filter(
     (document) => document.trust_level === "trusted"
   ).length;
+  const toolGroups = toolRegistryGroups(tools);
 
-  async function applyAgentRunDetail(
+  function applyAgentRunDetail(
     detail: AgentRunDetailResponse,
-    explicitLabel?: string | null
-  ): Promise<void> {
+    explicitLabel?: string | null,
+    recordedChunks = recordedRetrievalChunks(detail)
+  ): void {
     setAgentRun(detail);
     setActiveScenarioLabel(explicitLabel ?? scenarioLabelForAlertId(detail.alert_id) ?? "Latest agent run");
 
-    const extractedChunks = extractRetrievedChunks(detail);
-    if (extractedChunks.length > 0) {
-      setRagChunks(extractedChunks);
-      return;
-    }
-
-    const fallbackQuery =
-      detail.alert_id === DEMO_ALERT_IDS.gpuAbuse
-        ? DEMO_RAG_QUERIES.gpuAbuse
-        : detail.alert_id === DEMO_ALERT_IDS.promptInjection
-          ? DEMO_RAG_QUERIES.promptInjection
-          : null;
-
-    if (!fallbackQuery) {
-      setRagChunks([]);
-      return;
-    }
-
-    try {
-      const retrieval = await retrieveRagChunks(fallbackQuery);
-      setRagChunks(retrieval.results);
-    } catch {
-      setRagChunks([]);
-    }
+    setRagChunks(recordedChunks);
   }
 
   async function loadReferenceData(): Promise<string[]> {
@@ -277,8 +242,8 @@ export function DashboardShell() {
         return issues;
       }
 
-      const detail = await getAgentRunDetail(response.items[0].agent_run_id);
-      await applyAgentRunDetail(detail);
+      const { detail, chunks } = await loadRecordedAgentRun(response.items[0].agent_run_id, getAgentRunDetail);
+      applyAgentRunDetail(detail, undefined, chunks);
     } catch (error) {
       issues.push(getErrorMessage(error));
       setAgentRun(null);
@@ -341,7 +306,7 @@ export function DashboardShell() {
     } else {
       setStatusMessage((current) =>
         current ??
-        "Backend connected. Seed the bundled demo dataset to inspect live traces, citations, watchdog findings, and harness evidence."
+        "Backend connected. Seed the sample dataset to inspect investigation traces, citations, policy findings, and harness results."
       );
     }
 
@@ -359,7 +324,7 @@ export function DashboardShell() {
   async function handleSeedDemoData(): Promise<void> {
     setIsSeeding(true);
     setErrorMessage(null);
-    setStatusMessage("Seeding the deterministic demo dataset and refreshing the dashboard surface…");
+    setStatusMessage("Seeding the sample dataset and refreshing dashboard records…");
 
     try {
       const response = await seedDemoData(false);
@@ -370,7 +335,7 @@ export function DashboardShell() {
         loadLatestHarnessActivity(),
         loadEvaluationSnapshot(),
       ]);
-      setStatusMessage("Demo data seeded. The local stack is ready for agent and harness scenarios.");
+      setStatusMessage("Sample data seeded. Investigation and harness scenarios are available.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -382,7 +347,7 @@ export function DashboardShell() {
     const scenario = scenarioMetadata[kind];
     setRunningScenario(kind);
     setErrorMessage(null);
-    setStatusMessage(`Running ${scenario.label.toLowerCase()} with grounded retrieval, safe tools, and watchdog review…`);
+    setStatusMessage(`Running ${scenario.label.toLowerCase()} with runbook retrieval, local tools, and watchdog review…`);
 
     try {
       const seedResponse = await seedDemoData(false);
@@ -390,10 +355,10 @@ export function DashboardShell() {
 
       const runResponse = await runAgent(scenario.alertId);
       const detail = await getAgentRunDetail(runResponse.agent_run_id);
-      await applyAgentRunDetail(detail, scenario.label);
+      applyAgentRunDetail(detail, scenario.label);
       await Promise.all([loadReferenceData(), loadEvaluationSnapshot()]);
       setStatusMessage(
-        `${scenario.label} completed with status ${detail.status}. Human approval is still required before any risky action can progress.`
+        `${scenario.label} returned status ${detail.status}. Review recommendations manually; infrastructure actions cannot be executed here.`
       );
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -405,7 +370,7 @@ export function DashboardShell() {
   async function handleRunHarness(): Promise<void> {
     setIsRunningHarness(true);
     setErrorMessage(null);
-    setStatusMessage("Running the deterministic security harness across the local stack…");
+    setStatusMessage("Running the local security harness against its configured components and workflow scenarios…");
 
     try {
       const response = await runSecurityHarness(null, true);
@@ -434,7 +399,7 @@ export function DashboardShell() {
       setEvaluationSummary(response.summary);
       await loadLatestHarnessActivity();
       setStatusMessage(
-        `Evaluation ready. Overall score ${response.scorecard.overall_score.toFixed(1)} with ${response.summary.harness_performance.total_scenarios} harness scenarios in scope.`
+        `Evaluation ready. Aggregate indicator ${response.scorecard.overall_score.toFixed(1)} with ${response.summary.harness_performance.total_scenarios} harness scenarios in scope.`
       );
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -456,23 +421,23 @@ export function DashboardShell() {
           </div>
 
           <h1 className="mt-6 max-w-4xl font-display text-5xl font-semibold leading-tight text-white md:text-6xl">
-            Secure self-aware agentic incident triage
+            Incident triage with evidence and policy checks
           </h1>
 
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
-            RAG-grounded incident investigation with safe tools, watchdog policies,
-            and adversarial security harness.
+            Inspect runbook context, local tool responses, investigation traces,
+            and adversarial test results.
           </p>
 
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">
-            This dashboard shows the whole story: seeded alerts, deterministic agent
-            reasoning, auditable tool calls, grounded citations, policy findings, and
-            the human-approval boundary that keeps risky actions recommendation-only.
+            Investigations use deterministic reasoning and local infrastructure responses.
+            Review retrieved citations, uncertainty, and watchdog findings before deciding
+            what to do outside the system.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a className={buttonVariants({ size: "lg" })} href="#controls">
-              Seed and run demos
+              Seed and run scenarios
             </a>
             <a
               className={buttonVariants({ size: "lg", variant: "secondary" })}
@@ -480,19 +445,19 @@ export function DashboardShell() {
             >
               Inspect harness evidence
             </a>
-            <SafetyBadge value="mock-safe mode" />
-            <SafetyBadge value="human approval required" />
+            <SafetyBadge value="deterministic local reasoning" />
+            <SafetyBadge value="human review required" />
             <SafetyBadge value="no shell execution" />
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
-                Live backend
+                Backend connection
               </p>
               <p className="mt-3 text-sm leading-6 text-slate-200">
                 {health
-                  ? `Healthy in ${health.environment}. Last sync ${formatTimestamp(health.timestamp)}.`
+                  ? `API responding in ${health.environment}. Last sync ${formatTimestamp(health.timestamp)}.`
                   : "Waiting for the local backend connection."}
               </p>
             </div>
@@ -504,7 +469,7 @@ export function DashboardShell() {
               <p className="mt-3 text-sm leading-6 text-slate-200">
                 {latestHarnessRunId(harnessRun)
                   ? `Run ${latestHarnessRunId(harnessRun)} captured ${harnessRun?.total ?? 0} adversarial scenarios.`
-                  : "Run the bundled security harness to populate local AI-safety evidence."}
+                  : "Run the bundled security harness to record scenario outcomes."}
               </p>
             </div>
           </div>
@@ -527,14 +492,15 @@ export function DashboardShell() {
           health={health}
           isLoading={isBootstrapping}
           policiesCount={policies.length}
-          toolsCount={tools.length}
+          executableToolsCount={toolGroups[0].tools.length}
+          blockedToolsCount={toolGroups[1].tools.length}
           trustedDocumentsCount={trustedDocumentsCount}
         />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          change="Seeded runbooks and safety docs available for deterministic retrieval."
+          change="Stored runbooks and policy documents available for lexical retrieval."
           icon={LibraryBig}
           label="Knowledge base"
           value={String(documents.length)}
@@ -550,7 +516,7 @@ export function DashboardShell() {
           change={
             agentRun
               ? `${agentRun.tool_calls.length} tool calls recorded for the latest trace.`
-              : "Run a scenario to inspect the allowlisted tool audit trail."
+              : "Run a scenario to inspect the recorded tool calls."
           }
           icon={Wrench}
           label="Tool activity"
@@ -587,12 +553,12 @@ export function DashboardShell() {
       <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <Card className="border-white/8 bg-white/[0.03]">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-            Incident overview
+            Scenario catalog
           </p>
           <CardTitle className="mt-3">Bundled alert scenarios</CardTitle>
           <CardDescription className="mt-3">
-            The demo dataset ships with four realistic operational and AI-safety
-            incidents so the portfolio flow works end to end on a local machine.
+            Four sample incidents cover GPU abuse, SSH login attempts, storage
+            pressure, and document poisoning. The labels below describe the bundled fixtures.
           </CardDescription>
 
           <div className="mt-8 space-y-4">
@@ -624,13 +590,12 @@ export function DashboardShell() {
 
         <Card className="border-white/8 bg-white/[0.03]">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-            Control surface
+            Available components
           </p>
-          <CardTitle className="mt-3">Knowledge, tools, and policy rails</CardTitle>
+          <CardTitle className="mt-3">Documents, tools, and policies</CardTitle>
           <CardDescription className="mt-3">
-            The frontend stays local-first and portfolio-friendly by leaning on the
-            existing deterministic backend: typed tools, grounded retrieval, and
-            explicit watchdog policy gates.
+            Inspect the document catalog, typed tool definitions, and deterministic
+            watchdog policies exposed by the backend.
           </CardDescription>
 
           <div className="mt-8 grid gap-4">
@@ -640,10 +605,10 @@ export function DashboardShell() {
                   <Radar className="h-4 w-4" />
                 </span>
                 <div>
-                  <p className="font-medium text-white">Document surface</p>
+                  <p className="font-medium text-white">Document catalog</p>
                   <p className="mt-1 text-sm leading-6 text-slate-300">
-                    Trust labels and prompt-injection flags stay visible all the way
-                    into the agent trace.
+                    Document trust labels and retrieval scan findings are available
+                    alongside the investigation trace.
                   </p>
                 </div>
               </div>
@@ -662,7 +627,7 @@ export function DashboardShell() {
                   ))
                 ) : (
                   <p className="text-sm text-slate-300">
-                    Seed the demo dataset to load the runbooks and safety policy bundle.
+                    Seed the sample dataset to load the runbooks and policy documents.
                   </p>
                 )}
               </div>
@@ -675,18 +640,14 @@ export function DashboardShell() {
                     <Bot className="h-4 w-4" />
                   </span>
                   <div>
-                    <p className="font-medium text-white">Allowlisted tools</p>
+                    <p className="font-medium text-white">Tool definitions</p>
                     <p className="mt-1 text-sm leading-6 text-slate-300">
-                      Typed, deterministic, auditable, and mock-data based.
+                      The registry includes local adapters and blocked action definitions.
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {tools.slice(0, 6).map((tool) => (
-                    <SafetyBadge key={tool.name} value={tool.name} />
-                  ))}
-                </div>
+                <ToolRegistryGroups tools={tools} />
               </div>
 
               <div className="rounded-2xl border border-white/8 bg-ink/60 p-5">
@@ -697,8 +658,8 @@ export function DashboardShell() {
                   <div>
                     <p className="font-medium text-white">Watchdog policies</p>
                     <p className="mt-1 text-sm leading-6 text-slate-300">
-                      Recommendation checks that gate risky, weakly grounded, or
-                      injection-tainted outcomes.
+                      Checks for dangerous recommendations, citation gaps, low confidence,
+                      and suspicious context.
                     </p>
                   </div>
                 </div>
@@ -725,6 +686,7 @@ export function DashboardShell() {
       <section className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
         <RagContextPanel
           chunks={ragChunks}
+          hasRecordedRun={agentRun !== null}
           isLoading={isBootstrapping || runningScenario !== null}
         />
         <ToolCallsPanel
@@ -762,16 +724,16 @@ export function DashboardShell() {
             </span>
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Human approval story
+                Human review
               </p>
               <p className="mt-1 font-medium text-white">
-                Recommendations stop at the handoff line
+                Investigations end with a review handoff
               </p>
             </div>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            The agent can ground, summarize, and draft. It cannot self-authorize
-            infrastructure changes. Dangerous actions stay blocked or recommendation-only.
+            Completed investigations stop at waiting_for_human. Review happens outside
+            the application; approval, rejection, and workflow resumption are not implemented.
           </p>
         </Card>
 
@@ -782,16 +744,16 @@ export function DashboardShell() {
             </span>
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Tooling posture
+                Tool execution
               </p>
               <p className="mt-1 font-medium text-white">
-                Safe by default
+                Typed local adapters
               </p>
             </div>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Every tool is allowlisted, typed, deterministic, and audited. There is no
-            arbitrary shell execution, no hidden subprocess layer, and no live cluster control.
+            Executable adapters validate inputs and outputs and record tool activity.
+            Infrastructure responses are simulated, and destructive tool requests are blocked.
           </p>
         </Card>
 
@@ -802,17 +764,17 @@ export function DashboardShell() {
             </span>
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Portfolio signal
+                Reproducible testing
               </p>
               <p className="mt-1 font-medium text-white">
-                End-to-end local demo
+                Recorded scenarios and reports
               </p>
             </div>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            The dashboard is designed to showcase the whole system without paid APIs,
-            external services, or production credentials. It is ready for demos, screenshots,
-            and technical walkthroughs.
+            Run the bundled scenarios to inspect component and workflow behavior.
+            Export aggregate evaluation reports with counts, engineering indicators,
+            and the limitations of the current evaluation.
           </p>
         </Card>
       </section>

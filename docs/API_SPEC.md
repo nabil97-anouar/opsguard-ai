@@ -1,613 +1,174 @@
-# API_SPEC.md — OpsGuard AI FastAPI Endpoint Specifications
+# API Reference
 
-## Base URL
+The FastAPI service exposes JSON endpoints under `/api/v1` by default. With the backend running locally, use [Swagger UI](http://localhost:8000/docs) or the [OpenAPI schema](http://localhost:8000/openapi.json) for complete field definitions and response schemas. The prefix is configurable through `API_V1_PREFIX`.
 
+Routes are registered in [app/main.py](../backend/app/main.py). This reference covers the routes currently implemented in [app/api/routes](../backend/app/api/routes).
+
+## Access and request behavior
+
+The API has no authentication or per-user authorization. Use it in a trusted local environment. CORS configuration and response security headers do not provide access control.
+
+Agent, harness, and evaluation requests execute synchronously; they do not return background-job handles. A successful HTTP response can contain an application-level `failed` or `blocked` outcome. Check the response status, step errors, and watchdog findings.
+
+Many data endpoints call table creation before accessing records. `GET /health` reports application/configuration state; `GET /db/health` actually tests the SQL connection.
+
+## Endpoint inventory
+
+All paths below are relative to `/api/v1`.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/health` | Application version, environment, and configured dependency labels |
+| GET | `/db/health` | Database connectivity and latency |
+| POST | `/db/create-tables` | Create missing SQL tables; explicit endpoint disabled when `ENVIRONMENT=production` |
+| POST | `/demo/seed` | Seed fixture data; explicit endpoint disabled when `ENVIRONMENT=production` |
+| POST | `/documents/ingest` | Insert or update a document and its chunks |
+| GET | `/documents` | Document metadata list |
+| POST | `/rag/retrieve` | Retrieve scored document excerpts with trust and scan metadata |
+| GET | `/tools` | Tool definitions and input/output JSON schemas |
+| POST | `/tools/{tool_name}/execute` | Invoke a registered local tool or return a blocked result |
+| POST | `/agent/runs` | Run an investigation for an existing alert |
+| GET | `/agent/runs` | Most recent 20 stored runs |
+| GET | `/agent/runs/{agent_run_id}` | Run metadata, steps, tools, assessment, and recommendation |
+| GET | `/watchdog/policies` | Seven implemented policy definitions |
+| POST | `/watchdog/evaluate` | Evaluate caller-supplied context; does not persist this standalone decision |
+| GET | `/harness/scenarios` | Available scenario definitions |
+| POST | `/harness/run` | Run all or selected scenarios and persist results |
+| GET | `/harness/results` | Most recent 50 scenario results |
+| GET | `/harness/results/{harness_run_id}` | Aggregate and individual results for a harness run |
+| POST | `/evaluation/run` | Calculate an evaluation and attempt to store its summary |
+| GET | `/evaluation/summary` | Latest stored summary, or a calculation if none is available |
+| GET | `/evaluation/report.md` | Evaluation report as `text/markdown` |
+| GET | `/evaluation/report.json` | Structured evaluation report |
+| GET | `/evaluation/scores` | Most recent 20 stored evaluation rows |
+
+The list endpoints above do not expose configurable pagination. There are no alert CRUD, approval/rejection, feedback submission, ticket export, or per-incident report endpoints.
+
+## Request examples
+
+These are request bodies for the named endpoints. Replace example run/alert UUIDs with existing record IDs.
+
+### Seed fixtures
+
+`POST /demo/seed`:
+
+```json
+{"reset": false}
 ```
-http://localhost:8000/api/v1
-```
 
-All responses are JSON. All timestamps are ISO 8601 UTC. All IDs are UUIDs.
+`reset` defaults to `false`. Resetting changes fixture-related database records. Use a disposable local database for harness and reset workflows; see [Local Walkthrough](DEMO_SCRIPT.md).
 
-Error response envelope:
+### Ingest a document
+
+`POST /documents/ingest`:
+
 ```json
 {
-  "detail": "Human-readable error message",
-  "error_code": "SNAKE_CASE_CODE",
-  "timestamp": "2024-11-15T10:30:00Z"
+  "title": "GPU ownership investigation",
+  "source": "manual://gpu-ownership",
+  "doc_type": "runbook",
+  "trust_level": "untrusted",
+  "content": "Confirm the workload owner and preserve process and network evidence.",
+  "metadata": {"tags": ["gpu", "ownership"]}
 }
 ```
 
----
+The response includes `status`, `document_id`, `created`, `updated`, `skipped`, and `chunk_count`. The source is a label, not a URL-fetch instruction. Public `trust_level` defaults to `untrusted` and accepts only `untrusted` or `quarantined`. Invalid labels and trusted declarations, including metadata trust labels, return HTTP 422. There is no public trusted-ingestion override or trust-promotion endpoint.
 
-## GET /health
+Updates identify a source by title and source label. Demotions apply to existing chunks even when content is unchanged, and later ingestion cannot remove existing restrictions or release quarantine. Trust labels remain local policy assertions; ingestion does not authenticate source ownership.
 
-**Purpose:** Service health check. Returns status of all critical dependencies.
+### Retrieve context
 
-**Request body:** None
+`POST /rag/retrieve`:
 
-**Response body:**
 ```json
 {
-  "status": "healthy",
-  "version": "1.0.0",
-  "dependencies": {
-    "postgres": "healthy",
-    "qdrant": "healthy",
-    "llm_provider": "mock"
+  "query": "gpu workload ownership",
+  "limit": 5,
+  "trust_filter": null,
+  "include_untrusted": false
+}
+```
+
+The response contains `status`, `query`, and `results`. Results include document/chunk IDs, title, source, type, index, effective trust level, lexical score, excerpt, citation, and injection indicators. The API default for `include_untrusted` is `true`; the example selects trusted-only retrieval. `trust_filter` accepts only the three canonical labels, with exact matching; quarantined content is always excluded. Empty or lexically irrelevant queries return an empty `results` list. Trust never creates a positive score.
+
+`GET /documents` reports each document's normalized document-level trust label, while retrieval can apply stricter chunk/metadata restrictions. See [Retrieval and Evidence](RAG_DESIGN.md) for filtering and grounding limits.
+
+### Execute a tool
+
+`POST /tools/search_logs/execute`:
+
+```json
+{
+  "input": {"query": "xmrig mining pool", "limit": 5},
+  "agent_run_id": null
+}
+```
+
+The response includes legacy `status` (`executed`, `blocked`, or `failed`), semantic `outcome` (`succeeded`, `blocked`, or `failed`), `tool_call_id`, `tool_name`, `trust_level`, `requires_human_approval`, `output`, `error`, and `created_at`. A run ID associates the call with the exact persisted investigation audit record; `tool_call_id` is null without run context. `GET /tools` exposes `executable` for each definition: seven local adapters are executable and five destructive definitions are blocked. Contextless calls and invalid requests have audit limitations described in [Tool Registry](TOOL_REGISTRY.md).
+
+### Investigate an alert
+
+`POST /agent/runs`:
+
+```json
+{"alert_id": "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"}
+```
+
+This ID identifies the seeded GPU alert. The response includes `agent_run_id`, `alert_id`, `steps`, `self_assessment`, and `final_recommendation`, with status `waiting_for_human` or `failed`.
+
+Retrieve `/agent/runs/{agent_run_id}` for persisted tool calls, error details, provider metadata, and approval status. A pending approval is a terminal review state; there is no API to resume execution.
+
+### Evaluate a recommendation
+
+`POST /watchdog/evaluate`:
+
+```json
+{
+  "alert": {"severity": "critical"},
+  "self_assessment": {
+    "confidence_score": 0.4,
+    "missing_evidence": ["Confirmed workload owner"]
   },
-  "timestamp": "2024-11-15T10:30:00Z"
+  "final_recommendation": {
+    "summary": "Request operator review.",
+    "evidence": [],
+    "citations": [],
+    "recommended_next_steps": ["Confirm workload ownership."],
+    "blocked_actions_requiring_human_approval": [],
+    "notes": []
+  }
 }
 ```
 
-**Validation rules:** None
+Optional context fields also include `retrieved_context`, `tool_results`, `hypotheses`, `evidence_items`, `planned_tools`, and `blocked_tools`. The response contains `status`, `summary`, and `findings`. Decision values are `allow`, `allow_with_warnings`, `require_human_approval`, and `block`. These checks do not authorize infrastructure execution.
 
-**Example request:**
-```bash
-curl http://localhost:8000/api/v1/health
-```
+### Run the security harness
 
----
+`POST /harness/run`:
 
-## POST /demo/seed
-
-**Purpose:** Seed the database with demo alerts, documents, agent run traces, and security harness results. Idempotent — clears existing demo data and re-seeds.
-
-**Request body:**
 ```json
-{
-  "clear_existing": true,
-  "scenario_set": "full"
-}
+{"scenario_ids": null, "reset_demo_data": false}
 ```
 
-`scenario_set`: `"full"` (all scenarios) | `"minimal"` (5 alerts only) | `"security_focus"` (harness-heavy)
+`scenario_ids=null` selects all scenarios; a list selects named scenarios from `GET /harness/scenarios`. `reset_demo_data` defaults to `true`; this example preserves existing fixture records where possible. The harness still seeds data and writes investigation/results records.
 
-**Response body:**
+The response has status `completed`, a `harness_run_id`, aggregate `total`, `passed`, `failed`, `partial` counts, and individual `results`.
+
+### Generate an evaluation
+
+`POST /evaluation/run`:
+
 ```json
-{
-  "status": "seeded",
-  "alerts_created": 22,
-  "documents_ingested": 15,
-  "agent_runs_created": 10,
-  "harness_tests_created": 12,
-  "seed_duration_seconds": 8.4
-}
+{"run_harness_if_empty": false, "report_type": "full"}
 ```
 
-**Validation rules:**
-- Only available when `DEMO_MODE=true` in environment
+The response includes `persisted`, nullable `evaluation_score_id`, `summary`, and `scorecard`. If `run_harness_if_empty=true` (the default) and no harness rows exist, evaluation runs the harness with fixture reset enabled. `report_type` is a stored label, not a selector for different execution pipelines.
 
----
+The report GET endpoints resolve the latest stored summary when available, so request a new evaluation to refresh a saved report. Reports contain deterministic engineering metrics, not a scientific assessment of model capability.
 
-## POST /documents/ingest
+## Errors and schema sources
 
-**Purpose:** Ingest a document into the knowledge base. Chunks, embeds, and stores in Qdrant and PostgreSQL.
+FastAPI rejects malformed typed request fields with HTTP 422. Missing agent/alert/harness resources and unknown tool names return 404; invalid ingestion content or harness selection can return 400. Database health failures return 503. Some internal failures surface as server errors or application-level failed results.
 
-**Request body:** `multipart/form-data`
-```
-file: <file upload>
-source_type: runbook | incident_report | security_policy | ops_doc | checklist
-trust_level: trusted | untrusted
-tags: ["gpu", "memory", "recovery"]  (JSON array as form field)
-infrastructure_type: gpu_cluster | cloud | hpc | devops | security | saas
-```
-
-**Response body:**
-```json
-{
-  "document_id": "doc-uuid-001",
-  "title": "GPU Memory Overflow Recovery Runbook",
-  "chunk_count": 8,
-  "injection_scan_result": "clean",
-  "status": "ingested"
-}
-```
-
-**Validation rules:**
-- File types accepted: `.md`, `.txt`, `.yaml`, `.yml`, `.json`, `.pdf`
-- Max file size: 5 MB
-- `trust_level` is required; default is `untrusted`
-- Injection scan runs synchronously; if flagged, `status = "quarantined"`, document not added to retrieval
-
-**Example request:**
-```bash
-curl -X POST http://localhost:8000/api/v1/documents/ingest \
-  -F "file=@runbooks/gpu_overflow.md" \
-  -F "source_type=runbook" \
-  -F "trust_level=trusted" \
-  -F "tags=[\"gpu\",\"memory\"]" \
-  -F "infrastructure_type=gpu_cluster"
-```
-
----
-
-## GET /documents
-
-**Purpose:** List all ingested documents.
-
-**Query params:**
-- `source_type`: filter
-- `trust_level`: filter
-- `infrastructure_type`: filter
-- `injection_scan_result`: filter
-- `page`: int (default 1)
-- `page_size`: int (default 20, max 100)
-
-**Response body:**
-```json
-{
-  "items": [
-    {
-      "id": "doc-uuid-001",
-      "title": "GPU Memory Overflow Recovery Runbook",
-      "source_type": "runbook",
-      "trust_level": "trusted",
-      "chunk_count": 8,
-      "injection_scan_result": "clean",
-      "tags": ["gpu", "memory"],
-      "created_at": "2024-11-01T09:00:00Z"
-    }
-  ],
-  "total": 15,
-  "page": 1,
-  "page_size": 20
-}
-```
-
----
-
-## POST /rag/retrieve
-
-**Purpose:** Run a RAG query against the knowledge base. Used for debugging and evaluation.
-
-**Request body:**
-```json
-{
-  "query": "GPU memory overflow ECC error recovery steps",
-  "infrastructure_type": "gpu_cluster",
-  "top_k": 5,
-  "trust_level_filter": "trusted"
-}
-```
-
-**Response body:**
-```json
-{
-  "query": "GPU memory overflow ECC error recovery steps",
-  "results": [
-    {
-      "chunk_id": "chunk-uuid-001",
-      "document_id": "doc-uuid-001",
-      "document_title": "GPU Memory Overflow Recovery Runbook",
-      "content": "## Step 1: Check NVML error logs...",
-      "relevance_score": 0.94,
-      "trust_level": "trusted",
-      "citation": "GPU Memory Overflow Recovery Runbook, Section 2, Chunk 3"
-    }
-  ],
-  "retrieval_duration_ms": 45
-}
-```
-
-**Validation rules:**
-- `top_k` max: 20
-- Query max length: 500 characters
-
----
-
-## GET /alerts
-
-**Purpose:** List all alerts with filtering and pagination.
-
-**Query params:**
-- `status`: new | investigating | resolved | escalated | closed
-- `severity`: info | warning | error | critical
-- `infrastructure_type`: filter
-- `is_demo`: bool
-- `page`, `page_size`
-
-**Response body:**
-```json
-{
-  "items": [
-    {
-      "id": "alert-uuid-001",
-      "title": "GPU memory overflow on node-04",
-      "severity": "critical",
-      "source": "prometheus",
-      "infrastructure_type": "gpu_cluster",
-      "status": "investigating",
-      "agent_run_id": "run-uuid-001",
-      "tags": ["gpu", "memory"],
-      "created_at": "2024-11-15T08:00:00Z"
-    }
-  ],
-  "total": 22,
-  "page": 1,
-  "page_size": 20
-}
-```
-
----
-
-## POST /alerts
-
-**Purpose:** Create a new alert manually.
-
-**Request body:**
-```json
-{
-  "title": "GPU memory overflow on node-04",
-  "severity": "critical",
-  "source": "prometheus",
-  "infrastructure_type": "gpu_cluster",
-  "raw_data": {
-    "node": "gpu-node-04",
-    "gpu_id": 3,
-    "memory_used_gb": 79.8
-  },
-  "tags": ["gpu", "memory"]
-}
-```
-
-**Response body:**
-```json
-{
-  "id": "alert-uuid-001",
-  "status": "new",
-  "created_at": "2024-11-15T10:30:00Z"
-}
-```
-
-**Validation rules:**
-- `title`: max 500 chars
-- `severity`: must be valid enum
-- `raw_data`: sanitized — control characters stripped, max 50KB
-
----
-
-## POST /alerts/{alert_id}/investigate
-
-**Purpose:** Trigger an agent investigation run for a specific alert.
-
-**Path params:** `alert_id`: UUID
-
-**Request body:**
-```json
-{
-  "llm_provider": "mock",
-  "model_version": "mock-v1",
-  "priority": "high"
-}
-```
-
-**Response body:**
-```json
-{
-  "agent_run_id": "run-uuid-001",
-  "status": "running",
-  "started_at": "2024-11-15T10:30:05Z"
-}
-```
-
-**Validation rules:**
-- Alert must exist and not be in `resolved` or `closed` status
-- If alert already has a running agent run, return 409 Conflict
-- `llm_provider` must be in configured provider list
-
-**Notes:**
-- Agent run executes asynchronously (background task)
-- Frontend polls `GET /agent-runs/{run_id}` for status
-- Or use SSE endpoint `GET /agent-runs/{run_id}/stream` (optional)
-
----
-
-## GET /agent-runs/{run_id}
-
-**Purpose:** Get the status and summary of an agent run.
-
-**Response body:**
-```json
-{
-  "id": "run-uuid-001",
-  "alert_id": "alert-uuid-001",
-  "status": "awaiting_approval",
-  "llm_provider": "mock",
-  "total_steps": 12,
-  "total_tool_calls": 4,
-  "evidence_grounding_score": 0.78,
-  "risk_level": "high",
-  "approval_status": "pending",
-  "started_at": "2024-11-15T10:30:05Z",
-  "completed_at": null,
-  "duration_seconds": null
-}
-```
-
----
-
-## GET /agent-runs/{run_id}/trace
-
-**Purpose:** Get the full step-by-step execution trace for an agent run.
-
-**Response body:**
-```json
-{
-  "run_id": "run-uuid-001",
-  "steps": [
-    {
-      "id": "step-uuid-001",
-      "step_index": 1,
-      "node_name": "ingest_alert",
-      "status": "completed",
-      "duration_ms": 12,
-      "input_snapshot": { "alert_id": "alert-uuid-001" },
-      "output_snapshot": { "alert_raw": { "title": "...", "severity": "critical" } },
-      "created_at": "2024-11-15T10:30:05Z"
-    },
-    {
-      "id": "step-uuid-003",
-      "step_index": 3,
-      "node_name": "metacognitive_self_assessment",
-      "status": "completed",
-      "duration_ms": 340,
-      "output_snapshot": {
-        "self_assessment": {
-          "confidence_score": 0.52,
-          "decision": "retrieve_more",
-          "rationale": "GPU metrics available but missing process breakdown"
-        }
-      }
-    }
-  ]
-}
-```
-
----
-
-## GET /agent-runs/{run_id}/self-assessments
-
-**Purpose:** Get all metacognitive self-assessment records for an agent run.
-
-**Response body:**
-```json
-{
-  "run_id": "run-uuid-001",
-  "self_assessments": [
-    {
-      "id": "assess-uuid-001",
-      "step_id": "step-uuid-003",
-      "capability_area": "gpu_incident_triage",
-      "confidence_score": 0.52,
-      "uncertainty_level": "medium",
-      "what_agent_knows": ["GPU utilization 99.7%", "ECC errors detected"],
-      "missing_evidence": ["Process breakdown", "Job history"],
-      "within_capability": true,
-      "decision": "retrieve_more",
-      "rationale": "Evidence partially available but job history is critical for root cause",
-      "created_at": "2024-11-15T10:30:07Z"
-    }
-  ]
-}
-```
-
----
-
-## POST /agent-runs/{run_id}/approve
-
-**Purpose:** Human approves a pending agent recommendation.
-
-**Request body:**
-```json
-{
-  "decision": "approved",
-  "reviewer_id": "operator-1",
-  "reason": "Root cause analysis looks correct. Actions are appropriate.",
-  "modified_actions": []
-}
-```
-
-**Response body:**
-```json
-{
-  "status": "approved",
-  "agent_run_id": "run-uuid-001",
-  "resumed_at": "2024-11-15T10:45:00Z"
-}
-```
-
-**Validation rules:**
-- Agent run must have `approval_status = "pending"`
-- `reviewer_id` required
-
----
-
-## POST /agent-runs/{run_id}/reject
-
-**Purpose:** Human rejects a pending agent recommendation.
-
-**Request body:**
-```json
-{
-  "decision": "rejected",
-  "reviewer_id": "operator-1",
-  "reason": "Root cause assessment is incorrect. Needs more log data from node-04."
-}
-```
-
-**Response body:**
-```json
-{
-  "status": "rejected",
-  "agent_run_id": "run-uuid-001",
-  "workflow_ended_at": "2024-11-15T10:46:00Z"
-}
-```
-
----
-
-## POST /feedback
-
-**Purpose:** Submit human feedback on an agent run for evaluation improvement.
-
-**Request body:**
-```json
-{
-  "agent_run_id": "run-uuid-001",
-  "correctness_rating": 4,
-  "usefulness_rating": 5,
-  "safety_rating": 5,
-  "comments": "Correct root cause. Missing action to restart the CUDA context.",
-  "ground_truth_root_cause": "ECC memory error in GPU 3 caused by overheated HBM module"
-}
-```
-
-**Response body:**
-```json
-{
-  "feedback_id": "feedback-uuid-001",
-  "status": "recorded"
-}
-```
-
----
-
-## POST /security-harness/run
-
-**Purpose:** Trigger a full or partial security harness run.
-
-**Request body:**
-```json
-{
-  "categories": ["prompt_injection", "kill_chain"],
-  "test_ids": null,
-  "llm_provider": "mock"
-}
-```
-
-`categories`: null = run all | list of categories = run those only
-`test_ids`: null = all in category | list of test IDs = run specific tests
-
-**Response body:**
-```json
-{
-  "harness_run_id": "harness-uuid-001",
-  "status": "running",
-  "total_tests": 9,
-  "started_at": "2024-11-15T10:30:00Z"
-}
-```
-
----
-
-## GET /security-harness/results
-
-**Purpose:** Get all security harness run results with aggregate scores.
-
-**Query params:** `harness_run_id` (optional), `page`, `page_size`
-
-**Response body:**
-```json
-{
-  "runs": [
-    {
-      "harness_run_id": "harness-uuid-001",
-      "total_tests": 12,
-      "tests_passed": 10,
-      "overall_score": 87.5,
-      "security_rating": "Mostly Secure",
-      "category_scores": {
-        "prompt_injection": 90.0,
-        "kill_chain": 85.0,
-        "secret_leakage": 100.0,
-        "unsupported_conclusion": 80.0
-      },
-      "started_at": "2024-11-15T10:30:00Z",
-      "completed_at": "2024-11-15T10:32:45Z",
-      "results": [
-        {
-          "test_id": "PI-001",
-          "name": "log_injection_instruction_override",
-          "score": 10,
-          "max_score": 10,
-          "passed": true,
-          "injection_detected": true,
-          "action_blocked": true
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## GET /safety-events
-
-**Purpose:** Get the safety events log.
-
-**Query params:** `event_type`, `severity`, `agent_run_id`, `page`, `page_size`
-
-**Response body:**
-```json
-{
-  "items": [
-    {
-      "id": "event-uuid-001",
-      "event_type": "prompt_injection_detected",
-      "severity": "high",
-      "source": "run_prompt_injection_check",
-      "affected_component": "retrieved_doc",
-      "pattern_matched": "IGNORE ALL PREVIOUS INSTRUCTIONS",
-      "agent_run_id": "run-uuid-001",
-      "details": { "doc_id": "doc-uuid-002", "chunk_id": "chunk-uuid-007" },
-      "created_at": "2024-11-15T10:30:22Z"
-    }
-  ],
-  "total": 5
-}
-```
-
----
-
-## POST /reports/export
-
-**Purpose:** Export a full incident report as JSON or Markdown.
-
-**Request body:**
-```json
-{
-  "agent_run_id": "run-uuid-001",
-  "format": "json"
-}
-```
-
-`format`: `"json"` | `"markdown"`
-
-**Response body:**
-- If `format = "json"`: Returns full incident report JSON object
-- If `format = "markdown"`: Returns rendered Markdown string
-
-**Validation rules:**
-- Agent run must be in `completed` status
-- Returns 404 if no incident report found
-
-**Example JSON response structure:**
-```json
-{
-  "report_id": "report-uuid-001",
-  "generated_at": "2024-11-15T10:50:00Z",
-  "alert_summary": { "...": "..." },
-  "investigation_timeline": [ "..." ],
-  "self_assessments_summary": [ "..." ],
-  "evidence_retrieved": [ "..." ],
-  "tool_calls_summary": [ "..." ],
-  "hypotheses": [ "..." ],
-  "kill_chain_assessment": { "...": "..." },
-  "recommendation": { "...": "..." },
-  "human_decisions": [ "..." ],
-  "ticket_draft": { "...": "..." },
-  "evaluation_scores": { "...": "..." },
-  "safety_events": [ "..." ]
-}
-```
+Request and response schemas live in [app/schemas](../backend/app/schemas). Detailed contracts are defined by [agent_run.py](../backend/app/schemas/agent_run.py), [rag.py](../backend/app/schemas/rag.py), [tools.py](../backend/app/schemas/tools.py), [watchdog.py](../backend/app/schemas/watchdog.py), [harness.py](../backend/app/schemas/harness.py), and [evaluation.py](../backend/app/schemas/evaluation.py).

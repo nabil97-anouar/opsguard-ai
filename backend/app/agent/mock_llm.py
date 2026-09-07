@@ -115,76 +115,82 @@ def classify_alert(alert: dict[str, Any]) -> dict[str, Any]:
 
 def generate_hypotheses(
     alert: dict[str, Any],
-    retrieved_context: list[dict[str, Any]],
-    tool_results: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     alert_type = str(alert.get("classification", {}).get("alert_type") or alert.get("alert_type") or "unknown")
-    context_citations = [item.get("citation") for item in retrieved_context if item.get("citation")]
-    tool_names = [item.get("tool_name") for item in tool_results if item.get("tool_name")]
+    context_refs = [item["evidence_id"] for item in evidence_items if item.get("kind") == "retrieval"]
+    tool_refs = [item["evidence_id"] for item in evidence_items if item.get("kind") == "tool_output"]
+
+    if not context_refs and not tool_refs:
+        return [{
+            "title": "Insufficient observations to support an incident hypothesis",
+            "summary": "The alert requires investigation; no supporting document or successful tool observation was recorded.",
+            "confidence": 0.28,
+            "supporting_evidence": [],
+        }]
 
     if alert_type == "suspicious_gpu_usage":
         return [
             {
-                "title": "Unauthorized crypto-mining workload is consuming GPU resources",
+                "title": "Possible unauthorized crypto-mining workload",
                 "summary": (
-                    "The combination of xmrig indicators, outbound pool-like traffic, and high GPU utilization "
-                    "suggests a compromised or unauthorized workload."
+                    "Investigate whether the reported GPU activity is an unauthorized workload. "
+                    "The referenced observations and guidance require human interpretation."
                 ),
                 "confidence": 0.74,
-                "supporting_evidence": context_citations[:2] + [f"tool://{name}" for name in tool_names[:3]],
+                "supporting_evidence": context_refs[:2] + tool_refs[:3],
             },
             {
                 "title": "The suspicious process may have entered through a compromised training image",
                 "summary": (
-                    "Job metadata and node telemetry are consistent with a container image or runtime compromise "
-                    "rather than normal training behavior."
+                    "Review workload provenance and job ownership before attributing the activity to an image or runtime compromise."
                 ),
                 "confidence": 0.61,
-                "supporting_evidence": [f"tool://{name}" for name in tool_names[:3]],
+                "supporting_evidence": tool_refs[:3],
             },
         ]
 
     if alert_type == "rag_prompt_injection":
         return [
             {
-                "title": "Retrieved runbook content is attempting to replace safety policy",
+                "title": "Possible prompt injection in retrieved context",
                 "summary": (
-                    "The evidence points to deliberate prompt-injection text embedded in an untrusted runbook chunk."
+                    "Review the referenced content for policy-override instructions before attributing document poisoning."
                 ),
                 "confidence": 0.43,
-                "supporting_evidence": context_citations[:2] + [f"tool://{name}" for name in tool_names[:2]],
+                "supporting_evidence": context_refs[:2] + tool_refs[:2],
             },
             {
                 "title": "The poisoning may affect more than one document or ingestion path",
                 "summary": (
-                    "Suspicious retrieved content plus indexer-related log evidence suggests the issue may extend beyond a single chunk."
+                    "Inspect other sources and ingestion records to determine whether the suspicious content is isolated."
                 ),
                 "confidence": 0.34,
-                "supporting_evidence": [f"tool://{name}" for name in tool_names[:2]],
+                "supporting_evidence": tool_refs[:2],
             },
         ]
 
     if alert_type == "ssh_bruteforce":
         return [
             {
-                "title": "The login node is under external brute-force pressure",
+                "title": "Possible external brute-force activity",
                 "summary": (
-                    "Repeated failures across privileged accounts suggest an automated credential attack rather than isolated user error."
+                    "Review authentication observations to distinguish automated credential attacks from isolated user errors."
                 ),
                 "confidence": 0.7,
-                "supporting_evidence": context_citations[:1] + [f"tool://{name}" for name in tool_names[:2]],
+                "supporting_evidence": context_refs[:1] + tool_refs[:2],
             }
         ]
 
     if alert_type == "storage_inode_pressure":
         return [
             {
-                "title": "Cache or checkpoint growth is exhausting inodes on shared scratch",
+                "title": "Possible inode pressure from cache or checkpoint growth",
                 "summary": (
-                    "Storage evidence indicates a capacity problem driven by many small files rather than block-space exhaustion."
+                    "Confirm filesystem observations and directory ownership before attributing inode pressure to cache or checkpoint growth."
                 ),
                 "confidence": 0.68,
-                "supporting_evidence": context_citations[:1] + [f"tool://{name}" for name in tool_names[:2]],
+                "supporting_evidence": context_refs[:1] + tool_refs[:2],
             }
         ]
 
@@ -195,7 +201,7 @@ def generate_hypotheses(
                 "The workflow found too little scenario-specific evidence to produce a confident explanation."
             ),
             "confidence": 0.28,
-            "supporting_evidence": context_citations[:1],
+            "supporting_evidence": context_refs[:1],
         }
     ]
 
@@ -205,6 +211,8 @@ def assess_confidence(
     evidence_items: list[dict[str, Any]],
     suspicious_items: list[dict[str, Any]],
     missing_evidence: list[str],
+    *,
+    missing_targets: list[str] | None = None,
 ) -> dict[str, Any]:
     classification = alert.get("classification") or {}
     alert_type = str(classification.get("alert_type") or "unknown")
@@ -213,7 +221,13 @@ def assess_confidence(
     suspicious_penalty = min(0.32, len(suspicious_items) * 0.07)
     missing_penalty = min(0.24, len(missing_evidence) * 0.04)
     confidence_score = max(0.12, min(0.92, base_confidence + evidence_bonus - suspicious_penalty - missing_penalty))
+    # Missing operational identity limits what any otherwise relevant guidance can establish.
+    # This remains an engineering heuristic, not a calibrated probability.
+    if missing_targets:
+        confidence_score = min(confidence_score, 0.4)
     risk_flags: list[str] = []
+    if missing_targets:
+        risk_flags.append("missing_operational_target")
 
     if any(item.get("category") == "retrieved_context" and item.get("is_suspicious") for item in suspicious_items):
         risk_flags.append("suspicious_retrieved_context")
@@ -291,16 +305,8 @@ def generate_final_recommendation(state: dict[str, Any]) -> dict[str, Any]:
     if alert_type == "rag_prompt_injection":
         notes.append("Prompt-injection indicators were detected in retrieved or indexed content.")
 
-    evidence = [
-        {
-            "summary": item.get("summary"),
-            "citation": item.get("citation"),
-            "trust_level": item.get("trust_level"),
-            "suspicious": bool(item.get("suspicious")),
-        }
-        for item in evidence_items[:6]
-    ]
-    citations = [item.get("citation") for item in evidence_items if item.get("citation")][:8]
+    evidence = [dict(item) for item in evidence_items]
+    citations = [item["citation"] for item in evidence_items]
     hypothesis_titles = [item.get("title") for item in hypotheses if item.get("title")]
 
     if alert_type == "suspicious_gpu_usage":

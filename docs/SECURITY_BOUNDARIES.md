@@ -1,85 +1,65 @@
 # Security Boundaries
 
-OpsGuard AI is designed to demonstrate safer agentic operations patterns, not autonomous infrastructure control.
+OpsGuard constrains incident triage through a fixed workflow, a closed tool registry, input screening, policy evaluation, and a terminal review state. Its current infrastructure adapters return local fixtures; the application has no live infrastructure credentials or command-execution integration.
 
-## Core Boundary
+This document describes implemented controls and their limits.
 
-The system can investigate, retrieve context, summarize evidence, run safe mock tools, and draft recommendations.
+## Execution boundary
 
-The system cannot:
+[execute_tool](../backend/app/tools/registry.py) accepts only registered tool names and validates input and output against Pydantic schemas. Current handlers read local fixtures or SQL data, retrieve document chunks, and create local ticket drafts. They do not run arbitrary shell commands or send tickets to an external system.
 
-- execute real infrastructure commands
-- drain nodes, cancel jobs, block users, isolate systems, or disable services
-- call arbitrary shell commands
-- bypass human approval
-- treat retrieved documents or logs as trusted instructions
+The five disruptive definitions—`cancel_job`, `drain_node`, `block_user`, `isolate_node`, and `disable_service`—have no executable handler. The dispatcher returns a blocked result and creates a safety event. Supplying an approval field does not make them executable.
 
-## Why Dangerous Actions Are Blocked
+This restriction comes from registered capabilities and handlers, not a general-purpose sandbox. The dispatcher denies definitions that are destructive, require approval, or lack a handler. Registry usage descriptions are informational; there is no reviewer identity or approval-grant mechanism. See [Tool Registry](TOOL_REGISTRY.md).
 
-Operational AI can sound decisive at exactly the wrong moment. In real environments, low-confidence or poisoned evidence can lead to destructive recommendations. OpsGuard AI therefore keeps dangerous actions behind an explicit approval boundary.
+## Trust and evidence
 
-Blocked tool examples:
+Alert descriptions, documents, and tool outputs can contain untrusted text. The deterministic planner selects tools by incident category, and retrieved text does not become executable instructions.
 
-- `cancel_job`
-- `drain_node`
-- `block_user`
-- `isolate_node`
-- `disable_service`
+The canonical trust labels are `trusted`, `untrusted`, and `quarantined`. Public ingestion rejects trusted declarations, including metadata declarations. Internal provisioning can create trusted sources; ordinary ingestion cannot promote existing content. Metadata-only demotions update existing chunks, and retrieval resolves document/chunk/metadata conflicts to the most restrictive label. Malformed persisted labels fail closed to quarantine. Screening does not promote trust.
 
-These actions return blocked responses and can generate audit or safety evidence, but they do not execute.
+The retrieval API can exclude untrusted content and always excludes quarantined chunks. Trust labels are not source authentication or access control. Fixture reseeding without reset preserves demotions; an explicit fixture reset deletes and recreates baseline records. No reviewed promotion or unquarantine workflow is implemented.
 
-## Trust Model
+New recommendations preserve complete evidence snapshots, and hypothesis references must resolve to evidence recorded during that run. Failed or blocked tool attempts never become supporting observations. Missing operational targets create gaps instead of fixture-specific calls. Historical views use persisted evidence exclusively. These controls establish identity and retention; the application does not establish that each claim follows from its citations. [Retrieval and Evidence](RAG_DESIGN.md) describes these boundaries.
 
-The system treats these as untrusted by default:
+## Screening and watchdog checks
 
-- retrieved documents
-- log content
-- tool outputs
-- suspicious or policy-shaped text inside evidence
+The [injection scanner](../backend/app/rag/injection.py) matches known instruction-override, secret-disclosure, exfiltration, safety-disabling, and shell-command patterns. Ingestion records chunk scan results; retrieval uses stored results when present. Tool outputs are also scanned in the audit and agent paths.
 
-Even trusted documents are treated as data for grounding, not as instructions that override system policy.
+A clean result means no configured pattern matched. Screening does not cover every input field or attack formulation, and flagged documents are not automatically quarantined.
 
-## Human Approval Model
+The [watchdog](../backend/app/watchdog/policies.py) checks dangerous actions, prompt-injection indicators, untrusted context, low confidence on severe alerts, weak grounding, broad operations, and suspicious tool output. Its decision is one of `allow`, `allow_with_warnings`, `require_human_approval`, or `block`.
 
-The agent workflow always ends at a human-review boundary.
+These checks are heuristic. Text-based action checks have case and phrasing gaps, evidence discussion can trigger the same rules as proposed actions, and citation presence is not support verification. Watchdog results are review signals, not authorization to operate infrastructure.
 
-That means:
+The current reasoning layer is deterministic and does not interpret retrieved instructions as a language model would. Harness results for this implementation do not establish injection resistance for a future model provider.
 
-- recommendations can be generated
-- ticket drafts can be created internally
-- dangerous or disruptive actions remain recommendation-only
-- final approval must come from a human operator
+## Human review and drafts
 
-## Prompt-Injection Boundary
+[wait_for_human_approval](../backend/app/agent/nodes.py) ends every successful investigation with `waiting_for_human` and approval `pending`. There is no authenticated reviewer identity, approve/reject endpoint, or resumed execution path.
 
-The system includes lightweight detection at the RAG and watchdog layers for patterns such as:
+Ticket drafts are written locally before watchdog evaluation and do not receive the later watchdog annotations. Review the final run status and findings with the draft. A failed run may retain earlier snapshots or candidate text; those records are not evidence of completed policy review.
 
-- system override text
-- “ignore previous instructions”
-- secret-exfiltration language
-- unsafe tool redirection
-- shell-command style directives
+## Audit coverage
 
-Suspicious evidence lowers confidence, creates findings, and can force `require_human_approval` or `block`.
+The application stores step snapshots, assessments, tool calls, and safety events in SQL. Run-associated tool calls include arguments, output, timing, status, and screening results.
 
-## Demo-Only Scope
+Coverage is incomplete: contextless tool calls lack `ToolCall` records, validation/unknown-tool failures are not comprehensively recorded, and ticket input can name a different run from its audit context. Commits occur at multiple stages, so partial investigation records can remain after failure. Audit rows are ordinary database records, not a tamper-evident log.
 
-This repository is a deterministic local demo.
+See [Data Model](DATA_MODEL.md) and [Tool Registry](TOOL_REGISTRY.md) for storage and association details.
 
-It intentionally does not claim:
+## API and host exposure
 
-- production hardening
-- real SOC integration
-- deployment security review
-- live containment automation
-- external compliance certification
+The [FastAPI application](../backend/app/main.py) has CORS configuration and response security headers, but no authentication, per-user authorization, rate limiting, or tenant isolation. CORS and headers do not prevent direct API access.
 
-## Why This Still Matters
+[docker-compose.yml](../docker-compose.yml) publishes ports 3000, 8000, 5432, 6333, and 6334 without a `127.0.0.1` bind restriction. PostgreSQL defaults use local development credentials, and the backend listens on all container interfaces. Host reachability depends on Docker and network configuration; the Compose file itself does not restrict published ports to localhost.
 
-Even as a demo, these boundaries are the point of the project. The value is showing how to architect AI systems that:
+The explicit seeding and table-creation endpoints reject `ENVIRONMENT=production`, but that setting does not harden the application: other routes create tables, and harness/evaluation paths can seed or reset data. Use disposable fixture databases for these workflows and keep the API on a trusted local network boundary.
 
-- stay grounded
-- keep audit trails
-- measure uncertainty
-- resist unsafe escalation
-- remain explainable to humans
+The current runner requires no external model keys. Provider-related configuration fields do not enable a real provider. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings.
+
+## Interpreting evaluation
+
+Security-harness outcomes show whether particular implemented checks fired for particular fixtures. Evaluation includes counters and heuristic scores; it is not a certification of application security or a scientific measurement of model reliability.
+
+See [Security Harness](SECURITY_HARNESS.md), [Evaluation](EVALUATION.md), and [API Reference](API_SPEC.md) for reproducible inputs, result semantics, and supported operations.

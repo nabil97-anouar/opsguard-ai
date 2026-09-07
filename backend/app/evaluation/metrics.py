@@ -156,9 +156,9 @@ def _build_executive_summary(summary: EvaluationSummary) -> str:
 
 def _build_limitations() -> list[str]:
     return [
-        "This is a deterministic local demo and evaluation, not a production SOC certification.",
-        "Scores are based on persisted local runs, mock tools, and harness scenarios rather than live infrastructure telemetry.",
-        "No external LLM, SIEM, ticketing, or cluster-control systems are contacted during evaluation.",
+        "Scores are deterministic engineering heuristics over persisted local records, not validated model-quality measurements.",
+        "Latest-harness results are combined with history-wide counters, including seeded records and component-only harness runs.",
+        "Evaluation uses local reasoning and tool adapters; it does not validate live infrastructure or external service integrations.",
     ]
 
 

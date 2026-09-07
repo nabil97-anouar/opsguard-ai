@@ -8,9 +8,10 @@ import type { RetrievalChunk } from "@/lib/types";
 type RagContextPanelProps = {
   chunks: RetrievalChunk[];
   isLoading: boolean;
+  hasRecordedRun: boolean;
 };
 
-export function RagContextPanel({ chunks, isLoading }: RagContextPanelProps) {
+export function RagContextPanel({ chunks, isLoading, hasRecordedRun }: RagContextPanelProps) {
   return (
     <Card className="border-white/8 bg-white/[0.03]">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -20,8 +21,8 @@ export function RagContextPanel({ chunks, isLoading }: RagContextPanelProps) {
           </p>
           <CardTitle className="mt-3">Retrieved context with provenance</CardTitle>
           <CardDescription className="mt-3">
-            Retrieved text remains data, not instructions. Every chunk is shown
-            with source, trust level, score, and prompt-injection flags.
+            These snapshots show what this run retrieved, including its recorded trust
+            and source references. Current document changes do not update this evidence.
           </CardDescription>
         </div>
         <SafetyBadge value={`${chunks.length} chunks`} />
@@ -34,15 +35,16 @@ export function RagContextPanel({ chunks, isLoading }: RagContextPanelProps) {
 
         {!isLoading && chunks.length === 0 ? (
           <p className="rounded-2xl border border-white/8 bg-ink/60 p-4 text-sm text-slate-300">
-            Run a demo agent scenario to populate this panel with grounded
-            retrieval results.
+            {hasRecordedRun
+              ? "No retrieval evidence was recorded for this run. Historical evidence is not replaced with a fresh search."
+              : "Run an investigation to record retrieval evidence and source references."}
           </p>
         ) : null}
 
         {chunks.map((chunk) => (
           <div
             className="rounded-2xl border border-white/8 bg-ink/60 p-5"
-            key={chunk.chunk_id}
+            key={chunk.evidence_id ?? chunk.chunk_id}
           >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
@@ -78,6 +80,15 @@ export function RagContextPanel({ chunks, isLoading }: RagContextPanelProps) {
                 </p>
                 <p className="mt-2 font-mono text-xs text-slate-400">
                   Score {chunk.score.toFixed(2)} · Chunk {chunk.chunk_index}
+                </p>
+                <p className="mt-2 break-all font-mono text-xs text-slate-400">
+                  Document {chunk.document_id} · Chunk ID {chunk.chunk_id}
+                </p>
+                <p className="mt-2 break-all font-mono text-xs text-slate-400">
+                  {chunk.evidence_id ? `Evidence ${chunk.evidence_id}` : "Evidence ID not recorded (legacy run)"}
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  {chunk.observed_at ? `Retrieved ${new Date(chunk.observed_at).toLocaleString()}` : "Retrieval timestamp not recorded (legacy run)"}
                 </p>
               </div>
 

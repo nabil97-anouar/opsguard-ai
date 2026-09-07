@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime
 import json
 from time import perf_counter
@@ -24,6 +25,7 @@ from app.models import AgentRun, AgentStep, Alert, SafetyEvent, SelfAssessment
 from app.models.base import utcnow
 from app.rag.injection import detect_prompt_injection
 from app.rag.retrieval import retrieve_chunks
+from app.rag.trust import TrustLevel, resolve_effective_trust
 from app.tools import ToolExecutionContext, execute_tool
 from app.watchdog import WatchdogInput, evaluate_watchdog, record_watchdog_decision
 
@@ -182,10 +184,14 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
         )
         state.evidence_items.append(
             EvidenceItem(
-                evidence_id="ALERT-1",
+                evidence_id=f"{state.agent_run_id}:alert:{alert.id}",
                 kind="alert",
+                source_type="alert",
+                alert_id=alert.id,
+                content=deepcopy(state.alert_summary.model_dump(mode="json")),
+                observed_at=utcnow(),
                 summary=description,
-                citation=f"alert://{alert.id}",
+                citation=f"alert://{alert.id}/run/{state.agent_run_id}",
                 trust_level="untrusted",
                 suspicious=False,
                 source=alert.source,
@@ -203,6 +209,7 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
         return {
             "alert": state.alert_summary.model_dump(mode="json"),
             "evidence_added": 1,
+            "evidence_items": [item.model_dump(mode="json") for item in state.evidence_items],
         }
 
     return _run_node(
@@ -263,20 +270,38 @@ def retrieve_context(session: Session, agent_run: AgentRun, state: AgentState) -
         if not results:
             _append_missing_evidence(state, ["Relevant retrieval context for the alert scenario"])
 
-        state.retrieved_context = [RetrievedContextItem(**result.__dict__) for result in results]
-        evidence_start = len(state.evidence_items) + 1
+        observed_at = utcnow()
+        state.retrieved_context = [
+            RetrievedContextItem(
+                **result.__dict__,
+                evidence_id=f"{state.agent_run_id}:chunk:{result.chunk_id}",
+                observed_at=observed_at,
+            )
+            for result in results
+        ]
         suspicious_count = 0
 
-        for index, item in enumerate(state.retrieved_context, start=evidence_start):
+        for item in state.retrieved_context:
             state.evidence_items.append(
                 EvidenceItem(
-                    evidence_id=f"EVIDENCE-{index}",
+                    evidence_id=item.evidence_id,
                     kind="retrieval",
+                    source_type="document",
+                    document_id=item.document_id,
+                    chunk_id=item.chunk_id,
+                    retrieval_score=item.score,
+                    content=item.content_excerpt,
+                    observed_at=item.observed_at,
                     summary=item.content_excerpt,
-                    citation=item.citation,
+                    citation=f"document://{item.document_id}/chunk/{item.chunk_id}/run/{state.agent_run_id}",
                     trust_level=item.trust_level,
                     suspicious=item.is_suspicious or item.trust_level != "trusted",
                     source=item.source,
+                    title=item.title,
+                    chunk_index=item.chunk_index,
+                    doc_type=item.doc_type,
+                    matched_patterns=list(item.matched_patterns),
+                    risk_level=item.risk_level,
                 )
             )
 
@@ -321,6 +346,7 @@ def retrieve_context(session: Session, agent_run: AgentRun, state: AgentState) -
             "query": query,
             "results": [item.model_dump(mode="json") for item in state.retrieved_context],
             "citations": [item.citation for item in state.retrieved_context],
+            "evidence_items": [item.model_dump(mode="json") for item in state.evidence_items if item.kind == "retrieval"],
             "suspicious_count": suspicious_count,
         }
 
@@ -346,6 +372,8 @@ def plan_tool_calls(session: Session, agent_run: AgentRun, state: AgentState) ->
         return {
             "planned_tools": [tool.model_dump(mode="json") for tool in planned_tools],
             "blocked_tools": [tool.model_dump(mode="json") for tool in blocked_tools],
+            "missing_targets": list(state.missing_targets),
+            "missing_evidence": list(state.missing_evidence),
         }
 
     return _run_node(
@@ -376,14 +404,18 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
                     invocation_source="agent_runner",
                 ),
             )
-            output_payload = result.output
+            output_payload = deepcopy(result.output)
             scan_result = detect_prompt_injection(json.dumps(output_payload, sort_keys=True, default=str))
             is_suspicious = bool(scan_result["is_suspicious"])
-            trust_level = result.trust_level
+            trust_level = resolve_effective_trust(
+                result.trust_level, output_payload.get("trust_level", result.trust_level)
+            )
 
             tool_result = ToolResultItem(
                 tool_name=result.tool_name,
-                status=result.status,
+                tool_call_id=result.tool_call_id,
+                status=result.outcome,
+                observed_at=_ensure_aware(result.created_at),
                 trust_level=trust_level,
                 requires_human_approval=result.requires_human_approval,
                 output=output_payload,
@@ -393,10 +425,19 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
                 risk_level=str(scan_result["risk_level"]),
             )
             state.tool_results.append(tool_result)
-            state.executed_tools.append(result.tool_name)
 
-            if result.status != "executed":
+            if result.outcome != "succeeded":
                 _append_missing_evidence(state, [f"Successful output from tool {result.tool_name}"])
+                # Attempts remain in the step and ToolCall audit, never in supporting evidence.
+                continue
+
+            state.executed_tools.append(result.tool_name)
+            if result.tool_call_id is None:
+                _append_missing_evidence(state, [f"Persisted call identity for tool {result.tool_name}"])
+                continue
+            if trust_level == TrustLevel.QUARANTINED:
+                _append_missing_evidence(state, [f"Non-quarantined output from tool {result.tool_name}"])
+                continue
 
             if trust_level != "trusted" or is_suspicious:
                 suspicious_outputs += 1
@@ -422,7 +463,7 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
                     resolved=False,
                 )
 
-            evidence_id = f"EVIDENCE-{len(state.evidence_items) + 1}"
+            evidence_id = f"{state.agent_run_id}:tool:{result.tool_call_id}"
             summary = f"Tool {result.tool_name} returned structured output."
             if result.tool_name == "search_logs" and output_payload.get("matches"):
                 summary = str(output_payload["matches"][0].get("message") or summary)
@@ -449,11 +490,17 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
                 EvidenceItem(
                     evidence_id=evidence_id,
                     kind="tool_output",
+                    source_type="tool",
+                    tool_call_id=result.tool_call_id,
+                    content=deepcopy(output_payload),
+                    observed_at=tool_result.observed_at,
                     summary=summary,
-                    citation=f"tool://{result.tool_name}",
+                    citation=f"tool://{result.tool_name}/{result.tool_call_id}",
                     trust_level=trust_level,
                     suspicious=trust_level != "trusted" or is_suspicious,
                     source=result.tool_name,
+                    matched_patterns=list(scan_result["matched_patterns"]),
+                    risk_level=str(scan_result["risk_level"]),
                 )
             )
 
@@ -462,7 +509,9 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
         agent_run.evidence_grounding_score = round(trusted_evidence / total_evidence, 2)
 
         return {
-            "executed_tools": [item.model_dump(mode="json") for item in state.tool_results],
+            "tool_results": [item.model_dump(mode="json") for item in state.tool_results],
+            "executed_tools": [item.model_dump(mode="json") for item in state.tool_results if item.status == "succeeded"],
+            "evidence_items": [item.model_dump(mode="json") for item in state.evidence_items if item.kind == "tool_output"],
             "suspicious_outputs": suspicious_outputs,
         }
 
@@ -483,10 +532,13 @@ def synthesize_hypotheses(session: Session, agent_run: AgentRun, state: AgentSta
         alert_payload["classification"] = state.alert_classification
         hypotheses = generate_hypotheses(
             alert_payload,
-            [item.model_dump(mode="json") for item in state.retrieved_context],
-            [item.model_dump(mode="json") for item in state.tool_results],
+            [item.model_dump(mode="json") for item in state.evidence_items],
         )
-        state.hypotheses = [HypothesisItem(**item) for item in hypotheses]
+        validated_hypotheses = [HypothesisItem(**item) for item in hypotheses]
+        known_evidence = {item.evidence_id for item in state.evidence_items}
+        if any(set(item.supporting_evidence) - known_evidence for item in validated_hypotheses):
+            raise ValueError("Hypothesis references evidence outside this run.")
+        state.hypotheses = validated_hypotheses
         if not state.hypotheses:
             _append_missing_evidence(state, ["A coherent working hypothesis"])
 
@@ -516,6 +568,7 @@ def metacognitive_self_assessment(session: Session, agent_run: AgentRun, state: 
             [item.model_dump(mode="json") for item in state.evidence_items],
             state.suspicious_items,
             state.missing_evidence,
+            missing_targets=state.missing_targets,
         )
         state.self_assessment = AssessmentSnapshot(**assessment)
         state.requires_human_approval = True
@@ -547,6 +600,7 @@ def metacognitive_self_assessment(session: Session, agent_run: AgentRun, state: 
             "evidence_count": len(state.evidence_items),
             "suspicious_count": len(state.suspicious_items),
             "missing_evidence": state.missing_evidence,
+            "missing_targets": state.missing_targets,
         },
         handler,
     )
@@ -555,7 +609,13 @@ def metacognitive_self_assessment(session: Session, agent_run: AgentRun, state: 
 def generate_recommendation(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
     def handler(step: AgentStep) -> dict[str, Any]:
         recommendation_payload = generate_final_recommendation(state.model_dump(mode="json"))
-        state.final_recommendation = FinalRecommendation(**recommendation_payload)
+        recommendation = FinalRecommendation(**recommendation_payload)
+        expected_evidence = [item.model_dump(mode="json") for item in state.evidence_items]
+        if recommendation.evidence != expected_evidence:
+            raise ValueError("Recommendation must retain the run's complete evidence snapshots.")
+        if set(recommendation.citations) - {item.citation for item in state.evidence_items}:
+            raise ValueError("Recommendation cites evidence outside this run.")
+        state.final_recommendation = recommendation
 
         alert_type = str(state.alert_classification.get("alert_type") or "unknown")
         if alert_type != "unknown":

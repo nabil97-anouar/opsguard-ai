@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.rag.trust import TrustLevel
 
 
 class AlertSummary(BaseModel):
@@ -19,12 +22,14 @@ class AlertSummary(BaseModel):
 
 
 class RetrievedContextItem(BaseModel):
+    evidence_id: str
+    observed_at: datetime
     document_id: UUID
     chunk_id: UUID
     title: str
     source: str
     chunk_index: int
-    trust_level: str
+    trust_level: TrustLevel
     doc_type: str
     score: float
     content_excerpt: str
@@ -36,8 +41,10 @@ class RetrievedContextItem(BaseModel):
 
 class ToolResultItem(BaseModel):
     tool_name: str
-    status: str
-    trust_level: str
+    tool_call_id: UUID | None = None
+    status: Literal["succeeded", "failed", "blocked"]
+    observed_at: datetime
+    trust_level: TrustLevel
     requires_human_approval: bool = False
     output: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
@@ -47,13 +54,49 @@ class ToolResultItem(BaseModel):
 
 
 class EvidenceItem(BaseModel):
+    """Run-scoped observation snapshot, independent of current source records."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     evidence_id: str
-    kind: str
+    kind: Literal["alert", "retrieval", "tool_output"]
+    source_type: Literal["alert", "document", "tool"]
+    alert_id: UUID | None = None
+    document_id: UUID | None = None
+    chunk_id: UUID | None = None
+    tool_call_id: UUID | None = None
+    retrieval_score: float | None = Field(default=None, ge=0)
+    content: str | dict[str, Any]
+    observed_at: datetime
     summary: str
     citation: str
-    trust_level: str
+    trust_level: TrustLevel
     suspicious: bool = False
     source: str
+    title: str | None = None
+    chunk_index: int | None = None
+    doc_type: str | None = None
+    matched_patterns: list[str] = Field(default_factory=list)
+    risk_level: str = "low"
+
+    @model_validator(mode="after")
+    def validate_source_identity(self) -> "EvidenceItem":
+        if self.kind == "retrieval" and (
+            self.source_type != "document" or self.document_id is None or self.chunk_id is None
+            or self.retrieval_score is None or not isinstance(self.content, str)
+        ):
+            raise ValueError("Retrieved evidence requires document/chunk identity, score, and text snapshot.")
+        if self.kind == "tool_output" and (
+            self.source_type != "tool" or self.tool_call_id is None or not isinstance(self.content, dict)
+        ):
+            raise ValueError("Tool evidence requires a persisted call ID and structured output snapshot.")
+        if self.kind == "alert" and (self.source_type != "alert" or self.alert_id is None):
+            raise ValueError("Alert evidence requires an alert ID.")
+        if self.observed_at.tzinfo is None:
+            raise ValueError("Evidence timestamps must include a timezone.")
+        if self.trust_level == TrustLevel.QUARANTINED:
+            raise ValueError("Quarantined content cannot be supporting evidence.")
+        return self
 
 
 class PlannedToolCall(BaseModel):
@@ -118,6 +161,7 @@ class AgentState(BaseModel):
     suspicious_items: list[dict[str, Any]] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
     hypotheses: list[HypothesisItem] = Field(default_factory=list)
+    missing_targets: list[str] = Field(default_factory=list)
     planned_tools: list[PlannedToolCall] = Field(default_factory=list)
     executed_tools: list[str] = Field(default_factory=list)
     blocked_tools: list[BlockedToolRecommendation] = Field(default_factory=list)

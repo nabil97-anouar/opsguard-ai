@@ -1,4 +1,4 @@
-"""Evaluation package placeholder for Milestone 10."""
+"""Deterministic regression indicators, report generation, and score storage."""
 from app.evaluation.metrics import calculate_evaluation_summary
 from app.evaluation.reporter import generate_json_report, generate_markdown_report
 from app.evaluation.schemas import (

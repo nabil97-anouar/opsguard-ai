@@ -67,10 +67,7 @@ def test_agent_run_on_prompt_injection_alert(monkeypatch) -> None:
 
     assert result.status == "waiting_for_human"
     assert result.self_assessment is not None
-    assert result.self_assessment.decision in {
-        "stop_and_request_human_review",
-        "recommend_human_review",
-    }
+    assert result.self_assessment.decision == "stop_and_request_human_review"
     assert result.self_assessment.uncertainty_level == "high"
     assert result.final_recommendation is not None
     combined_text = " ".join(
@@ -111,7 +108,7 @@ def test_agent_run_on_unknown_alert_has_missing_evidence(monkeypatch) -> None:
 
         result = run_agent_for_alert(session, alert_id=unknown_alert.id)
 
-    assert result.status in {"waiting_for_human", "failed"}
+    assert result.status == "waiting_for_human"
     assert result.self_assessment is not None
     assert result.self_assessment.missing_evidence
     assert result.self_assessment.confidence_score < 0.5
@@ -136,6 +133,7 @@ def test_agent_run_api_endpoints(monkeypatch) -> None:
     assert detail_response.status_code == 200
     detail_payload = detail_response.json()
     assert detail_payload["agent_run_id"] == agent_run_id
+    assert detail_payload["model_version"] == "deterministic-mock-v2"
     assert detail_payload["tool_calls"]
     assert detail_payload["final_recommendation"]["requires_human_approval"] is True
 

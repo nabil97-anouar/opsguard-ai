@@ -50,19 +50,19 @@ function summarizeStepOutput(step: AgentStep): string {
 
   if (step.node_name === "retrieve_context") {
     const results = Array.isArray(output.results) ? output.results.length : 0;
-    return `${results} retrieved chunks grounded the run.`;
+    return `${results} chunks were returned by retrieval.`;
   }
 
   if (step.node_name === "execute_safe_tools") {
     const executedTools = Array.isArray(output.executed_tools)
       ? output.executed_tools.length
       : 0;
-    return `${executedTools} allowlisted tools executed with auditable outputs.`;
+    return `${executedTools} tool results were recorded for this step.`;
   }
 
   if (step.node_name === "metacognitive_self_assessment") {
     if (typeof output.confidence_score === "number") {
-      return `Confidence ${output.confidence_score.toFixed(2)} with ${String(
+      return `Heuristic confidence ${output.confidence_score.toFixed(2)} with ${String(
         output.uncertainty_level ?? "unknown"
       )} uncertainty.`;
     }
@@ -73,7 +73,7 @@ function summarizeStepOutput(step: AgentStep): string {
   }
 
   if (step.node_name === "wait_for_human_approval") {
-    return "The run paused for human approval instead of taking direct action.";
+    return "The investigation ended at a manual review handoff. Workflow resumption is not implemented.";
   }
 
   if (step.node_name === "generate_recommendation") {
@@ -112,8 +112,8 @@ function humanApprovalBanner(
 
   return (
     <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4 text-sm leading-6 text-amber-50">
-      Human approval is required before any recommendation can progress. The
-      workflow never performs destructive actions directly from this UI.
+      This recommendation requires manual review outside the application.
+      Approval controls and infrastructure execution are not implemented.
     </div>
   );
 }
@@ -139,7 +139,7 @@ export function AgentRunTrace({
         </p>
         <CardTitle className="mt-3">No active agent run yet</CardTitle>
         <CardDescription className="mt-3">
-          Seed the demo data and launch one of the GPU or prompt-injection
+          Seed the sample data and launch one of the GPU or prompt-injection
           scenarios to inspect the full step-by-step workflow.
         </CardDescription>
       </Card>
@@ -179,6 +179,9 @@ export function AgentRunTrace({
             <p className="mt-3 text-sm leading-6 text-slate-50">
               {agentRun.final_recommendation.summary}
             </p>
+            <div className="mt-4">
+              <JsonInspector data={agentRun.final_recommendation.evidence} title="Recorded supporting evidence" />
+            </div>
           </div>
         ) : null}
 

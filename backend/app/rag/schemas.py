@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from app.rag.trust import TrustLevel
+
 
 @dataclass(frozen=True)
 class IngestionResult:
@@ -21,7 +23,7 @@ class RetrievalResult:
     title: str
     source: str
     chunk_index: int
-    trust_level: str
+    trust_level: TrustLevel
     doc_type: str
     score: float
     content_excerpt: str
@@ -37,5 +39,5 @@ class ListedDocument:
     title: str
     source: str
     doc_type: str
-    trust_level: str
+    trust_level: TrustLevel
     created_at: datetime

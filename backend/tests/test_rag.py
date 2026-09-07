@@ -98,10 +98,10 @@ def test_rag_retrieval_and_ingestion_with_demo_seed(monkeypatch) -> None:
     ingest_response = client.post(
         "/api/v1/documents/ingest",
         json={
-            "title": "Trusted GPU Memory Escalation Note",
+            "title": "GPU Memory Escalation Note",
             "source": "manual://gpu-escalation-note",
             "doc_type": "runbook",
-            "trust_level": "trusted",
+            "trust_level": "untrusted",
             "content": (
                 "# GPU Escalation\n\n"
                 "Check for suspicious GPU processes and validate job ownership before escalating.\n\n"
@@ -118,10 +118,10 @@ def test_rag_retrieval_and_ingestion_with_demo_seed(monkeypatch) -> None:
     repeated_ingest_response = client.post(
         "/api/v1/documents/ingest",
         json={
-            "title": "Trusted GPU Memory Escalation Note",
+            "title": "GPU Memory Escalation Note",
             "source": "manual://gpu-escalation-note",
             "doc_type": "runbook",
-            "trust_level": "trusted",
+            "trust_level": "untrusted",
             "content": (
                 "# GPU Escalation\n\n"
                 "Check for suspicious GPU processes and validate job ownership before escalating.\n\n"
@@ -137,10 +137,10 @@ def test_rag_retrieval_and_ingestion_with_demo_seed(monkeypatch) -> None:
     changed_ingest_response = client.post(
         "/api/v1/documents/ingest",
         json={
-            "title": "Trusted GPU Memory Escalation Note",
+            "title": "GPU Memory Escalation Note",
             "source": "manual://gpu-escalation-note",
             "doc_type": "runbook",
-            "trust_level": "trusted",
+            "trust_level": "untrusted",
             "content": (
                 "# GPU Escalation\n\n"
                 "Check for suspicious GPU processes, validate job ownership, and snapshot outbound peers.\n\n"
@@ -157,11 +157,11 @@ def test_rag_retrieval_and_ingestion_with_demo_seed(monkeypatch) -> None:
     documents_response = client.get("/api/v1/documents")
     assert documents_response.status_code == 200
     documents_payload = documents_response.json()
-    assert any(document["title"] == "Trusted GPU Memory Escalation Note" for document in documents_payload)
+    assert any(document["title"] == "GPU Memory Escalation Note" for document in documents_payload)
 
     with Session(test_engine) as session:
         ingested_document = session.exec(
-            select(Document).where(Document.title == "Trusted GPU Memory Escalation Note")
+            select(Document).where(Document.title == "GPU Memory Escalation Note")
         ).first()
         assert ingested_document is not None
         ingested_chunks = session.exec(

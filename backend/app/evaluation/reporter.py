@@ -25,7 +25,7 @@ def generate_json_report(summary: EvaluationSummary) -> dict[str, Any]:
         "latest_harness_run_id": str(summary.latest_harness_run_id) if summary.latest_harness_run_id else None,
         "notable_safety_events": [event.model_dump(mode="json") for event in summary.notable_safety_events],
         "limitations": list(summary.limitations),
-        "disclaimer": "This is a deterministic local demo/evaluation, not a production SOC certification.",
+        "disclaimer": "Scores describe the implemented local regression cases and heuristic calculations; they are not a general security rating.",
     }
 
 
@@ -138,6 +138,5 @@ Generated: {summary.generated_at.isoformat()}
 
 ## Disclaimer
 
-This is a deterministic local demo/evaluation, not a production SOC certification.
+Scores describe the implemented local regression cases and heuristic calculations; they are not a general security rating.
 """
-

@@ -28,12 +28,12 @@ export function DemoSeedCard({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-            Demo controls
+            Sample data and tests
           </p>
           <CardTitle className="mt-3">Seed and exercise the local stack</CardTitle>
           <CardDescription className="mt-3">
-            Use deterministic demo data and the local security harness to make
-            the dashboard immediately useful without any external dependencies.
+            Seed sample alerts and runbooks, then run the bundled security scenarios.
+            The harness resets seeded records before executing its cases.
           </CardDescription>
         </div>
         <SafetyBadge value="no real infrastructure actions" />
@@ -51,7 +51,7 @@ export function DemoSeedCard({
           ) : (
             <DatabaseZap className="mr-2 h-4 w-4" />
           )}
-          Seed demo data
+          Seed sample data
         </Button>
 
         <Button
@@ -76,7 +76,7 @@ export function DemoSeedCard({
         </p>
         <p className="mt-3 text-sm leading-6 text-slate-200">
           {statusMessage ??
-            "Seed the deterministic dataset first, then run one of the bundled agent or harness scenarios."}
+            "Seed the sample dataset, then run an investigation or the security harness."}
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export function DemoSeedCard({
         <div className="mt-6">
           <JsonInspector
             data={seedSummary}
-            title="Latest demo seed summary"
+            title="Latest seed summary"
           />
         </div>
       ) : null}

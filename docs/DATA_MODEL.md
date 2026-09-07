@@ -1,406 +1,81 @@
-# DATA_MODEL.md — OpsGuard AI Database Schema
+# Data Model
 
-## Overview
+OpsGuard uses SQLModel and SQLAlchemy for relational persistence. PostgreSQL is the configured default; SQLite can be selected explicitly through `DATABASE_URL`. There is no automatic database failover.
 
-All relational data is stored in PostgreSQL using SQLModel (SQLAlchemy core with Pydantic validation). All primary keys are UUIDs. Timestamps are always UTC ISO 8601. Enums are stored as VARCHAR with Python Enum validation.
+The authoritative declarations are in [app/models](../backend/app/models). [app/db/session.py](../backend/app/db/session.py) creates the engine and request sessions; [app/db/init_db.py](../backend/app/db/init_db.py) creates missing tables with `SQLModel.metadata.create_all`. There is no schema-migration framework.
 
----
+## Storage conventions
 
-## Table: `alerts`
+- Primary keys are UUIDs. Runtime rows generally use generated UUIDs; seeded records and ingested chunks have application-generated deterministic IDs.
+- Structured fields use JSON, with a JSONB variant on PostgreSQL. Lists such as tags and citations are JSON values, not PostgreSQL array columns.
+- Timestamp defaults use UTC. Timezone round-tripping depends on the database; SQLite may return naive timestamps.
+- Status, severity, and trust columns remain strings, not database enums. Document/chunk trust assignments and API schemas validate the canonical `trusted`, `untrusted`, and `quarantined` labels; retrieval treats malformed legacy trust as quarantined.
+- Foreign keys and indexes are declared in the models. There is no database uniqueness constraint for one run per alert, one assessment/ticket per run, or a document's title/source pair.
 
-Stores incoming operational alerts from all infrastructure sources.
+## Tables and current use
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | Auto-generated |
-| `title` | VARCHAR(500) | Alert title |
-| `severity` | VARCHAR(20) | `info` / `warning` / `error` / `critical` |
-| `source` | VARCHAR(100) | e.g., `prometheus`, `slurm`, `grafana`, `manual` |
-| `infrastructure_type` | VARCHAR(50) | `gpu_cluster` / `cloud` / `hpc` / `devops` / `security` / `saas` |
-| `raw_data` | JSONB | Full alert payload — treated as untrusted |
-| `status` | VARCHAR(30) | `new` / `investigating` / `resolved` / `escalated` / `closed` |
-| `agent_run_id` | UUID FK → `agent_runs.id` | Nullable |
-| `created_at` | TIMESTAMPTZ | UTC |
-| `updated_at` | TIMESTAMPTZ | UTC |
-| `resolved_at` | TIMESTAMPTZ | Nullable |
-| `tags` | TEXT[] | e.g., `["gpu", "memory", "node-04"]` |
-| `is_demo` | BOOLEAN | True for seeded demo data |
+| Table / model | Principal fields and links | Current role |
+| --- | --- | --- |
+| `alerts` / `Alert` | Title, severity, source, infrastructure type, raw data, status, tags; nullable latest `agent_run_id` | Seeded incident inputs; runner updates investigation status and latest-run reference |
+| `incidents` / `Incident` | `alert_id`, nullable `agent_run_id`, root cause, resolution, status | Seeded historical incident records queried by a local tool |
+| `documents` / `Document` | Title, source type, source label in `file_path`, content hash, trust, version, tags, chunk count, scan result | Document metadata created by seeding or ingestion |
+| `document_chunks` / `DocumentChunk` | `document_id`, index, content/hash, token estimate, trust, scan result, metadata | SQL content storage used directly by lexical retrieval |
+| `agent_runs` / `AgentRun` | `alert_id`, status, provider/model label, counters, grounding heuristic, risk, approval state, timing, error | Investigation record created by runner and harness; also seeded |
+| `agent_steps` / `AgentStep` | `agent_run_id`, index, node, status, input/output snapshots, duration, error | Persisted execution trace |
+| `self_assessments` / `SelfAssessment` | `agent_run_id`, `step_id`, confidence, uncertainty, capability, known/missing evidence, decision, rationale | Deterministic assessment snapshots |
+| `tool_calls` / `ToolCall` | `agent_run_id`, `step_id`, tool, arguments, output, trust, status, duration, scan result | Tool audit rows when a run context is supplied |
+| `safety_events` / `SafetyEvent` | Optional run/harness-result links, event type, severity, component, details, pattern, resolution flag | Tool blocking, screening, watchdog, and harness findings |
+| `ticket_drafts` / `TicketDraft` | `agent_run_id`, `alert_id`, title/body, actions, evidence links, team, SLA label, exported flag | Local draft records; no external export implementation |
+| `security_harness_tests` / `SecurityHarnessTest` | Scenario identifier, category, payload, expected behavior, scoring metadata | Stored definitions maintained from fixtures and the Python scenario registry |
+| `security_harness_results` / `SecurityHarnessResult` | `harness_run_id`, `test_id`, score/max score, passed flag, observed behavior, safety link, details | Persisted scenario outcomes |
+| `evaluation_scores` / `EvaluationScore` | `agent_run_id`, metric fields, report type, overall score, `summary_payload` | Stored aggregate evaluation snapshots linked to an available run |
+| `kill_chain_mappings` / `KillChainMapping` | `agent_run_id`, stages, indicators, confidences, rationale | Seeded records; the agent has no runtime kill-chain mapping node |
+| `human_feedback` / `HumanFeedback` | `agent_run_id`, decision, reviewer label, reason, modified actions | Seeded records; no feedback or authenticated approval submission API |
 
-**Indexes:** `status`, `severity`, `infrastructure_type`, `created_at`, `is_demo`
+The SQL column `document_chunks.metadata` maps to the Python attribute `chunk_metadata`. Chunks are not written to Qdrant.
 
-**Example row:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "title": "GPU memory overflow on node-04 — NVIDIA NVML error",
-  "severity": "critical",
-  "source": "prometheus",
-  "infrastructure_type": "gpu_cluster",
-  "raw_data": {
-    "node": "gpu-node-04",
-    "gpu_id": 3,
-    "memory_used_gb": 79.8,
-    "memory_total_gb": 80,
-    "log_lines": ["ERROR kernel: NVML error on GPU 3 — ECC memory error"]
-  },
-  "status": "investigating",
-  "tags": ["gpu", "memory", "critical", "node-04"],
-  "is_demo": true
-}
+## Relationships
+
+```mermaid
+erDiagram
+    ALERTS ||--o{ AGENT_RUNS : has_runs
+    ALERTS ||--o{ INCIDENTS : has_records
+    DOCUMENTS ||--o{ DOCUMENT_CHUNKS : contains
+    AGENT_RUNS ||--o{ AGENT_STEPS : records
+    AGENT_RUNS ||--o{ SELF_ASSESSMENTS : records
+    AGENT_RUNS ||--o{ TOOL_CALLS : records
+    AGENT_RUNS ||--o{ TICKET_DRAFTS : drafts
+    AGENT_RUNS ||--o{ EVALUATION_SCORES : links
+    SECURITY_HARNESS_TESTS ||--o{ SECURITY_HARNESS_RESULTS : produces
 ```
 
----
+The diagram shows principal foreign-key relationships, not enforced workflow cardinalities. An alert can have multiple runs; `alerts.agent_run_id` is a separate nullable back-reference updated by the runner. Harness runs are grouped by the `harness_run_id` value; there is no dedicated harness-run table.
 
-## Table: `incidents`
+Tool calls and assessments also reference a step. Safety events can reference a run and a harness result; harness results can reference a safety event. These relationships require deliberate deletion ordering.
 
-Finalized incident records after investigation.
+## Status conventions
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `alert_id` | UUID FK → `alerts.id` | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `title` | VARCHAR(500) | |
-| `severity` | VARCHAR(20) | |
-| `root_cause` | TEXT | Best supported hypothesis |
-| `resolution` | TEXT | What was done or recommended |
-| `kill_chain_stage` | VARCHAR(100) | Nullable |
-| `status` | VARCHAR(30) | `open` / `resolved` / `postmortem` |
-| `created_at` | TIMESTAMPTZ | |
-| `resolved_at` | TIMESTAMPTZ | Nullable |
-| `is_demo` | BOOLEAN | |
+| Record | Values produced by the current runtime | Other stored conventions |
+| --- | --- | --- |
+| Agent run | `running`, `waiting_for_human`, `failed` | Seed data includes `completed` and `awaiting_approval` |
+| Agent approval | Runner sets `pending` | Model default is `not_required`; seeded approval values are historical fixtures |
+| Agent step | `running`, `completed`, `failed` | Harness and manual audit steps also use `completed` |
+| Tool call | Registry writes `executed`, `blocked`, `failed` | Model default and seeded calls use `success` |
+| Document/chunk scan | `pending`, `clean`, `flagged` | `quarantined` is handled as a trust label, not an automatic scan transition |
+| Harness result | API exposes `passed`, `failed`, `partial` | Database stores a boolean `passed` plus score and detailed result payload |
 
----
+A successful runner sets `completed_at` when it reaches `waiting_for_human`; this timestamp marks the end of computation, not a completed human review. Status fields do not implement an approval state machine.
 
-## Table: `documents`
+## Persistence boundaries
 
-Ingested knowledge base documents (runbooks, incident reports, policies, etc.).
+Recommendations, hypotheses, and retrieved evidence are stored within step snapshots rather than separate normalized tables. New evidence snapshots retain run-scoped IDs, source/document/chunk/tool-call identity, trust, content or excerpt, and observation time. Hypotheses reference those evidence IDs, and tool citations include the specific `tool_calls` ID. These JSON references are validated by the workflow, not relational foreign keys. Confidence and grounding fields remain heuristics; valid evidence identity does not establish claim entailment.
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `title` | VARCHAR(500) | |
-| `source_type` | VARCHAR(50) | `runbook` / `incident_report` / `security_policy` / `ops_doc` / `checklist` |
-| `file_path` | VARCHAR(500) | Relative path under `demo_data/` |
-| `content_hash` | VARCHAR(64) | SHA-256 of content for dedup |
-| `trust_level` | VARCHAR(20) | `trusted` / `untrusted` / `quarantined` |
-| `tags` | TEXT[] | |
-| `infrastructure_type` | VARCHAR(50) | |
-| `version` | VARCHAR(20) | e.g., `1.0`, `2024-11` |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
-| `is_demo` | BOOLEAN | |
-| `chunk_count` | INT | Total chunks created |
-| `injection_scan_result` | VARCHAR(20) | `clean` / `flagged` / `quarantined` / `pending` |
+Ingestion replaces chunks when document content changes; metadata-only updates synchronize trust and metadata on existing chunks without replacing their IDs. Effective retrieval trust resolves document, chunk, and legacy metadata labels restrictively. A document demotion immediately governs its existing chunks, even if an older chunk label is stale. Public ingestion cannot grant trusted authority or remove existing restrictions. Ordinary fixture upserts preserve demotions; an explicit reset recreates the fixed baseline.
 
-**Indexes:** `source_type`, `trust_level`, `tags` (GIN)
+Old trace evidence remains in snapshots, so an earlier chunk reference need not resolve to a currently stored chunk to display historical observations. Historical views never fill missing evidence through fresh retrieval. Legacy records are not retroactively assigned missing provenance. No SQL column migration is required for these snapshot and trust-validation changes; malformed pre-existing labels remain stored but are excluded by the retrieval boundary.
 
-**Example row:**
-```json
-{
-  "id": "doc-uuid-001",
-  "title": "GPU Memory Overflow Recovery Runbook",
-  "source_type": "runbook",
-  "trust_level": "trusted",
-  "tags": ["gpu", "memory", "recovery", "nvidia"],
-  "infrastructure_type": "gpu_cluster",
-  "version": "2.1",
-  "chunk_count": 8,
-  "injection_scan_result": "clean"
-}
-```
+The runner and tool registry commit incrementally, so an investigation is not one atomic database transaction. Direct tool calls without run context lack tool-call rows. Audit records are ordinary mutable database records, with no tamper-evident log.
 
----
+SQLite engine setup does not enable foreign-key enforcement explicitly; constraint behavior can therefore differ from PostgreSQL. Table creation does not migrate existing schemas. Use disposable databases for fixture reset and harness workflows, and review relationships before deleting retained records.
 
-## Table: `document_chunks`
-
-Individual chunks from ingested documents, stored in PostgreSQL for relational queries and in Qdrant for vector search.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | Also used as Qdrant point ID |
-| `document_id` | UUID FK → `documents.id` | |
-| `chunk_index` | INT | Position within document |
-| `content` | TEXT | Raw chunk text |
-| `content_hash` | VARCHAR(64) | For dedup |
-| `token_count` | INT | |
-| `metadata` | JSONB | Headings, section, page ref, etc. |
-| `trust_level` | VARCHAR(20) | Inherited from document |
-| `injection_scan_result` | VARCHAR(20) | `clean` / `flagged` |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `agent_runs`
-
-One record per investigation triggered on an alert.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `alert_id` | UUID FK → `alerts.id` | |
-| `status` | VARCHAR(30) | `running` / `completed` / `failed` / `rejected` / `stopped` / `awaiting_approval` |
-| `llm_provider` | VARCHAR(50) | e.g., `openai_gpt4`, `anthropic_claude`, `mock` |
-| `model_version` | VARCHAR(50) | |
-| `total_steps` | INT | |
-| `total_tool_calls` | INT | |
-| `total_tokens_used` | INT | Nullable |
-| `evidence_grounding_score` | FLOAT | Final score |
-| `risk_level` | VARCHAR(20) | `low` / `medium` / `high` / `critical` |
-| `approval_status` | VARCHAR(20) | `not_required` / `pending` / `approved` / `rejected` / `expired` |
-| `started_at` | TIMESTAMPTZ | |
-| `completed_at` | TIMESTAMPTZ | Nullable |
-| `duration_seconds` | FLOAT | Nullable |
-| `error_message` | TEXT | Nullable |
-| `is_demo` | BOOLEAN | |
-
----
-
-## Table: `agent_steps`
-
-One record per node execution in an agent run.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `step_index` | INT | Order within run |
-| `node_name` | VARCHAR(100) | e.g., `classify_alert`, `retrieve_context` |
-| `status` | VARCHAR(20) | `running` / `completed` / `failed` / `skipped` |
-| `input_snapshot` | JSONB | State snapshot before node |
-| `output_snapshot` | JSONB | State mutations from node |
-| `duration_ms` | INT | |
-| `error` | TEXT | Nullable |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `self_assessments`
-
-Metacognitive self-assessment records from each assessment node execution.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `step_id` | UUID FK → `agent_steps.id` | |
-| `capability_area` | VARCHAR(100) | e.g., `gpu_incident_triage`, `security_analysis` |
-| `confidence_score` | FLOAT | 0.0–1.0 |
-| `uncertainty_level` | VARCHAR(20) | `low` / `medium` / `high` / `critical` |
-| `what_agent_knows` | TEXT[] | List of available evidence items |
-| `missing_evidence` | TEXT[] | List of missing evidence items |
-| `within_capability` | BOOLEAN | |
-| `decision` | VARCHAR(30) | `continue` / `retrieve_more` / `call_tool` / `ask_human` / `stop` / `delegate` |
-| `rationale` | TEXT | Plain English explanation |
-| `overridden_by_policy` | BOOLEAN | Whether watchdog overrode this decision |
-| `created_at` | TIMESTAMPTZ | |
-
-**Example row:**
-```json
-{
-  "id": "assess-uuid-001",
-  "agent_run_id": "run-uuid-001",
-  "step_id": "step-uuid-003",
-  "capability_area": "gpu_incident_triage",
-  "confidence_score": 0.52,
-  "uncertainty_level": "medium",
-  "what_agent_knows": [
-    "GPU memory utilization: 99.7%",
-    "ECC memory errors detected",
-    "Node: gpu-node-04, GPU: 3"
-  ],
-  "missing_evidence": [
-    "Process-level memory breakdown",
-    "Recent job history on this node",
-    "Historical ECC error rate for this GPU"
-  ],
-  "within_capability": true,
-  "decision": "retrieve_more",
-  "rationale": "GPU memory overflow is within capability, but missing process breakdown and job history to confirm root cause. Retrieving runbook and querying job history before proceeding.",
-  "overridden_by_policy": false
-}
-```
-
----
-
-## Table: `tool_calls`
-
-Audit log for every tool invocation during an agent run.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `step_id` | UUID FK → `agent_steps.id` | |
-| `tool_name` | VARCHAR(100) | |
-| `input_args` | JSONB | Validated input |
-| `output` | JSONB | Raw tool output |
-| `trust_level` | VARCHAR(20) | `trusted` / `untrusted` |
-| `duration_ms` | INT | |
-| `status` | VARCHAR(20) | `success` / `error` / `timeout` / `blocked` |
-| `error_message` | TEXT | Nullable |
-| `injection_scan_result` | VARCHAR(20) | `clean` / `flagged` |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `safety_events`
-
-All safety-relevant events: injections detected, policy violations, watchdog blocks.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | Nullable |
-| `harness_result_id` | UUID FK → `security_harness_results.id` | Nullable |
-| `event_type` | VARCHAR(100) | e.g., `prompt_injection_detected`, `policy_violation`, `dangerous_action_blocked` |
-| `severity` | VARCHAR(20) | `info` / `warning` / `error` / `critical` |
-| `source` | VARCHAR(100) | Which component detected it |
-| `affected_component` | VARCHAR(100) | e.g., `retrieved_doc`, `tool_output`, `recommendation` |
-| `details` | JSONB | Full event detail |
-| `pattern_matched` | TEXT | The specific pattern that triggered |
-| `resolved` | BOOLEAN | |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `kill_chain_mappings`
-
-Stores AI kill-chain analysis for each agent run.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `stages_detected` | TEXT[] | List of detected stage names |
-| `primary_stage` | VARCHAR(100) | Nullable |
-| `stage_confidence` | JSONB | `{stage_name: confidence_float}` |
-| `stage_indicators` | JSONB | `{stage_name: [evidence_item]}` |
-| `overall_confidence` | FLOAT | |
-| `rationale` | TEXT | |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `human_feedback`
-
-Stores human approval decisions and feedback on agent recommendations.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `decision` | VARCHAR(20) | `approved` / `rejected` |
-| `reviewer_id` | VARCHAR(100) | e.g., user ID or demo "operator-1" |
-| `reason` | TEXT | Free text reason |
-| `modified_actions` | JSONB | Optional overridden action list |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `evaluation_scores`
-
-Per-run evaluation metrics.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `evidence_grounding` | FLOAT | 0.0–1.0 |
-| `correctness` | FLOAT | 0.0–1.0 (vs. demo ground truth) |
-| `non_speculativeness` | FLOAT | |
-| `incident_focus` | FLOAT | |
-| `actionability` | FLOAT | |
-| `safety_score` | FLOAT | |
-| `response_time_seconds` | FLOAT | |
-| `safety_violations_blocked` | INT | |
-| `prompt_injection_resistance` | FLOAT | |
-| `tool_misuse_resistance` | FLOAT | |
-| `uncertainty_calibration` | FLOAT | |
-| `human_approval_usefulness` | FLOAT | Nullable (only if approval occurred) |
-| `overall_score` | FLOAT | Weighted aggregate |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `ticket_drafts`
-
-Draft incident tickets generated by the agent.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `agent_run_id` | UUID FK → `agent_runs.id` | |
-| `alert_id` | UUID FK → `alerts.id` | |
-| `title` | VARCHAR(500) | |
-| `severity` | VARCHAR(20) | |
-| `description` | TEXT | |
-| `steps_to_reproduce` | TEXT[] | |
-| `suggested_actions` | JSONB | |
-| `evidence_links` | TEXT[] | |
-| `kill_chain_stage` | VARCHAR(100) | Nullable |
-| `assigned_team` | VARCHAR(100) | |
-| `sla_target` | VARCHAR(50) | |
-| `exported` | BOOLEAN | |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Table: `security_harness_tests`
-
-Definitions of security harness test scenarios (loaded from YAML/JSON registry).
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `test_id` | VARCHAR(50) | e.g., `PI-001` |
-| `category` | VARCHAR(50) | `prompt_injection` / `kill_chain` / `secret_leakage` / `unsupported_conclusion` |
-| `name` | VARCHAR(200) | |
-| `description` | TEXT | |
-| `injection_point` | VARCHAR(100) | Where the attack is injected |
-| `attack_payload` | JSONB | The test input |
-| `expected_behavior` | TEXT | |
-| `detection_logic` | TEXT | |
-| `max_score` | INT | |
-| `weight` | FLOAT | For aggregate scoring |
-| `active` | BOOLEAN | |
-
----
-
-## Table: `security_harness_results`
-
-Results of harness test runs.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `harness_run_id` | UUID | Groups tests from one harness run |
-| `test_id` | UUID FK → `security_harness_tests.id` | |
-| `score` | INT | 0–10 |
-| `max_score` | INT | |
-| `passed` | BOOLEAN | |
-| `actual_behavior` | TEXT | What the agent actually did |
-| `injection_detected` | BOOLEAN | |
-| `action_blocked` | BOOLEAN | |
-| `safety_event_id` | UUID FK → `safety_events.id` | Nullable |
-| `details` | JSONB | Full test execution detail |
-| `created_at` | TIMESTAMPTZ | |
-
----
-
-## Relationships Summary
-
-```
-alerts 1──────────── 0..1 agent_runs
-agent_runs 1──────── * agent_steps
-agent_runs 1──────── * self_assessments
-agent_runs 1──────── * tool_calls
-agent_runs 1──────── * safety_events
-agent_runs 1──────── 0..1 kill_chain_mappings
-agent_runs 1──────── * human_feedback
-agent_runs 1──────── 1 evaluation_scores
-agent_runs 1──────── 0..1 ticket_drafts
-alerts 1─────────── 0..1 incidents
-documents 1────────── * document_chunks
-security_harness_tests 1──── * security_harness_results
-```
+See [Agent Workflow](AGENT_GRAPH.md), [Retrieval and Evidence](RAG_DESIGN.md), [Tool Registry](TOOL_REGISTRY.md), and [API Reference](API_SPEC.md).

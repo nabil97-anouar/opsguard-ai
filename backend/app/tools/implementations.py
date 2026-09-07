@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 
 from app.models import AgentRun, Alert, Incident, TicketDraft
 from app.rag.retrieval import retrieve_chunks
+from app.rag.trust import TrustLevel
 from app.tools.base import ToolExecutionContext
 from app.tools.mock_data import (
     MOCK_LOG_ENTRIES,
@@ -121,6 +122,8 @@ def search_logs_handler(
 
 
 class GetNodeMetricsInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     node: str = Field(min_length=1, max_length=100)
 
 
@@ -147,8 +150,10 @@ def get_node_metrics_handler(
 
 
 class GetRunningJobsInput(BaseModel):
-    node: str | None = Field(default=None, max_length=100)
-    user: str | None = Field(default=None, max_length=100)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    node: str | None = Field(default=None, min_length=1, max_length=100)
+    user: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class RunningJob(BaseModel):
@@ -181,6 +186,8 @@ def get_running_jobs_handler(
 
 
 class CheckNetworkConnectionsInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     node: str = Field(min_length=1, max_length=100)
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -274,7 +281,7 @@ class RunbookRetrievalResult(BaseModel):
     title: str
     source: str
     chunk_index: int
-    trust_level: str
+    trust_level: TrustLevel
     score: float
     content_excerpt: str
     is_suspicious: bool

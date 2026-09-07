@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.rag.trust import TrustLevel
 from app.schemas.common import CreatedAtSchema, IDSchema, SchemaModel, UpdatedAtSchema
 
 
@@ -13,7 +14,7 @@ class DocumentBase(SchemaModel):
     source_type: str
     file_path: str | None = None
     content_hash: str | None = None
-    trust_level: str
+    trust_level: TrustLevel
     tags: list[str] = Field(default_factory=list)
     infrastructure_type: str | None = None
     version: str | None = None
@@ -33,7 +34,7 @@ class DocumentChunkBase(SchemaModel):
     content_hash: str | None = None
     token_count: int = 0
     chunk_metadata: dict[str, Any] = Field(default_factory=dict)
-    trust_level: str
+    trust_level: TrustLevel
     injection_scan_result: str
 
 

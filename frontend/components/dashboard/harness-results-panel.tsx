@@ -27,11 +27,11 @@ export function HarnessResultsPanel({
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
             Security harness
           </p>
-          <CardTitle className="mt-3">Adversarial AI-safety scenarios</CardTitle>
+          <CardTitle className="mt-3">Adversarial regression scenarios</CardTitle>
           <CardDescription className="mt-3">
-            The harness replays prompt injection, malicious tool feedback,
-            blocked dangerous tools, and weak-grounding cases against the live
-            local stack.
+            The harness checks prompt injection, malicious tool feedback,
+            blocked tool requests, and citation gaps in selected components and workflows.
+            Results describe these cases, not general model security.
           </CardDescription>
         </div>
 
@@ -83,7 +83,7 @@ export function HarnessResultsPanel({
 
         {!isLoading && !harnessRun ? (
           <p className="rounded-2xl border border-white/8 bg-ink/60 p-4 text-sm text-slate-300">
-            Run the security harness to populate live adversarial results in the
+            Run the security harness to record scenario results in the
             dashboard.
           </p>
         ) : null}

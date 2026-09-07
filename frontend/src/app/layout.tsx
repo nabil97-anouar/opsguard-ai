@@ -25,7 +25,7 @@ const monoFont = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "OpsGuard AI",
   description:
-    "Secure self-aware AI agents for incident triage and AI security testing."
+    "Incident triage with runbook retrieval, typed local tools, policy checks, and adversarial testing."
 };
 
 export default function RootLayout({

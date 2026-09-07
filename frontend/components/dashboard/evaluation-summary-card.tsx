@@ -43,11 +43,11 @@ export function EvaluationSummaryCard({
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
             Evaluation and reports
           </p>
-          <CardTitle className="mt-3">Safety scorecard and export-ready reports</CardTitle>
+          <CardTitle className="mt-3">Engineering indicators and evaluation reports</CardTitle>
           <CardDescription className="mt-3 max-w-3xl">
-            This layer rolls up harness outcomes, watchdog findings, tool-safety posture,
-            grounding quality, and human-approval enforcement into a deterministic local
-            scorecard for demos, screenshots, and portfolio walkthroughs.
+            Aggregate harness outcomes, policy findings, tool activity, and citation
+            presence. Scores are engineering heuristics; they do not establish model
+            accuracy, calibrated confidence, or general injection resistance.
           </CardDescription>
         </div>
 
@@ -87,7 +87,7 @@ export function EvaluationSummaryCard({
             <p className="text-sm leading-6 text-slate-300">
               {isLoading
                 ? "Loading the latest evaluation summary from the local backend…"
-                : "Run the evaluation once the demo data or harness results are in place to generate the portfolio scorecard."}
+                : "Run evaluation after recording investigations or harness results to calculate aggregate indicators."}
             </p>
           </div>
         )}
@@ -100,10 +100,10 @@ export function EvaluationSummaryCard({
               <BarChart3 className="h-4 w-4" />
             </span>
             <div>
-              <p className="font-medium text-white">Executive summary</p>
+              <p className="font-medium text-white">Evaluation summary</p>
               <p className="mt-1 text-sm leading-6 text-slate-300">
                 {summary?.executive_summary ??
-                  "No persisted evaluation yet. The backend can still calculate a non-persisted summary on demand."}
+                  "No evaluation summary is available. Run evaluation to calculate indicators from the recorded activity."}
               </p>
             </div>
           </div>
@@ -113,7 +113,7 @@ export function EvaluationSummaryCard({
               <>
                 <SafetyBadge value={scoreLabel(metrics.overall_score)} />
                 <SafetyBadge
-                  value={`${summary?.human_approval_enforcement.runs_requiring_human_approval ?? 0} human approvals`}
+                  value={`${summary?.human_approval_enforcement.runs_requiring_human_approval ?? 0} runs requiring review`}
                 />
                 <SafetyBadge
                   value={`${summary?.tool_safety.blocked_tool_calls ?? 0} blocked tool calls`}
@@ -133,8 +133,8 @@ export function EvaluationSummaryCard({
             Report exports
           </p>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            Export the current backend state as Markdown or JSON. These endpoints stay
-            local and deterministic, so the report is safe to demo without external services.
+            Export the latest saved evaluation as Markdown or JSON. Run evaluation
+            to refresh its counts, scorecard, and limitations from recorded activity.
           </p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -176,7 +176,7 @@ export function EvaluationSummaryCard({
           <div className="mt-5 text-sm leading-6 text-slate-300">
             {harness ? (
               <p>
-                Latest harness summary: {harness.passed} passed, {harness.partial} partial,{" "}
+                Harness results in scope: {harness.passed} passed, {harness.partial} partial,{" "}
                 {harness.failed} failed across {harness.total_scenarios} scenarios.
               </p>
             ) : (
