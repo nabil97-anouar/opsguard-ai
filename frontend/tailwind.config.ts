@@ -9,25 +9,25 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0a0a0a",
-        surface: "#111111",
-        panel: "#161b22",
-        line: "#243041",
-        accent: "#3b82f6",
-        accentSoft: "#60a5fa",
-        success: "#22c55e",
+        ink: "#020403",
+        surface: "#050806",
+        panel: "#07100a",
+        line: "#163322",
+        accent: "#00ff66",
+        accentSoft: "#45ff8a",
+        success: "#19c96b",
         warning: "#f59e0b",
         danger: "#ef4444",
         critical: "#dc2626"
       },
       fontFamily: {
-        display: ["var(--font-display)"],
-        body: ["var(--font-body)"],
-        mono: ["var(--font-mono)"]
+        display: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        body: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["SFMono-Regular", "Cascadia Code", "Roboto Mono", "Menlo", "monospace"]
       },
       boxShadow: {
-        panel: "0 20px 60px rgba(2, 6, 23, 0.45)",
-        glow: "0 0 0 1px rgba(96, 165, 250, 0.15), 0 20px 50px rgba(59, 130, 246, 0.18)"
+        panel: "0 20px 60px rgba(0, 0, 0, 0.5)",
+        glow: "0 0 0 1px rgba(0, 255, 102, 0.22), 0 0 34px rgba(0, 255, 102, 0.12)"
       },
       backgroundImage: {
         grid: "linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)"

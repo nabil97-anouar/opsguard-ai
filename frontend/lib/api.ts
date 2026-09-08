@@ -12,6 +12,7 @@ import type {
   HarnessRunResponse,
   HarnessScenarioListResponse,
   HealthPayload,
+  ReasoningRuntime,
   RagRetrieveRequest,
   RagRetrieveResponse,
   ToolListResponse,
@@ -82,6 +83,10 @@ export function getErrorMessage(error: unknown): string {
 
 export async function getBackendHealth(): Promise<HealthPayload> {
   return request<HealthPayload>("/health");
+}
+
+export async function getReasoningRuntime(): Promise<ReasoningRuntime> {
+  return request<ReasoningRuntime>("/runtime/reasoning");
 }
 
 export async function seedDemoData(reset = false): Promise<DemoSeedResponse> {

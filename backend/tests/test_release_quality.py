@@ -43,12 +43,13 @@ def test_invalid_cors_fails_early_without_echoing_secret(monkeypatch, value):
     assert "user:secret" not in str(caught.value)
 
 
-def test_unused_integration_settings_are_removed(monkeypatch):
+def test_only_supported_provider_settings_are_present(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     settings = Settings(_env_file=None)
-    assert not ({"llm_provider", "mock_llm", "qdrant_url", "openai_api_key", "anthropic_api_key", "secret_key", "postgres_password"} & type(settings).model_fields.keys())
+    assert {"llm_provider", "openai_api_key", "openai_model"} <= type(settings).model_fields.keys()
+    assert not ({"mock_llm", "qdrant_url", "anthropic_api_key", "secret_key", "postgres_password"} & type(settings).model_fields.keys())
     example = ROOT.joinpath(".env.example").read_text()
-    assert "QDRANT" not in example and "OPENAI_API_KEY" not in example and "SECRET_KEY" not in example
+    assert "QDRANT" not in example and "ANTHROPIC" not in example and "SECRET_KEY" not in example
 
 
 @pytest.fixture

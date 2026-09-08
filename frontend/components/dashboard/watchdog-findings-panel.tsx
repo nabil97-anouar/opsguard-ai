@@ -17,12 +17,10 @@ export function WatchdogFindingsPanel({
   const verdict = watchdogVerdict(recommendation?.watchdog_decision?.verdict ?? recommendation?.watchdog_status);
 
   return (
-    <Card className="border-white/8 bg-white/[0.03]">
+    <Card className="matrix-panel">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-            Watchdog safety
-          </p>
+          <p className="console-kicker">WATCHDOG // POLICY DECISION</p>
           <CardTitle className="mt-3">Policy verdict before human review</CardTitle>
           <CardDescription className="mt-3">
             Inspect policy findings and their supporting references. An allow verdict

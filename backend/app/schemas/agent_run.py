@@ -24,6 +24,10 @@ class AgentRunBase(ExecutionProvenance):
     status: str
     llm_provider: str
     model_version: str | None = None
+    reasoning_mode: str = "legacy_unknown"
+    reasoning_schema_version: str | None = None
+    provider_request_ids: list[str] = Field(default_factory=list)
+    provider_duration_ms: int = 0
     total_steps: int = 0
     total_tool_calls: int = 0
     total_tokens_used: int | None = None
@@ -115,6 +119,13 @@ class AgentRunResponse(ExecutionProvenance):
     steps: list[AgentStepResponse] = Field(default_factory=list)
     self_assessment: AgentAssessmentResponse | None = None
     final_recommendation: FinalRecommendationResponse | None = None
+    llm_provider: str = "legacy_unknown"
+    model_version: str | None = None
+    reasoning_mode: str = "legacy_unknown"
+    reasoning_schema_version: str | None = None
+    provider_request_ids: list[str] = Field(default_factory=list)
+    provider_duration_ms: int = 0
+    total_tokens_used: int | None = None
 
 
 class AgentRunDetailResponse(ExecutionProvenance):
@@ -123,6 +134,11 @@ class AgentRunDetailResponse(ExecutionProvenance):
     status: str
     llm_provider: str
     model_version: str | None = None
+    reasoning_mode: str = "legacy_unknown"
+    reasoning_schema_version: str | None = None
+    provider_request_ids: list[str] = Field(default_factory=list)
+    provider_duration_ms: int = 0
+    total_tokens_used: int | None = None
     risk_level: str
     approval_status: str
     started_at: datetime
@@ -144,6 +160,9 @@ class AgentRunListItem(ExecutionProvenance):
     approval_status: str
     started_at: datetime
     completed_at: datetime | None = None
+    llm_provider: str = "legacy_unknown"
+    model_version: str | None = None
+    reasoning_mode: str = "legacy_unknown"
 
 
 class AgentRunListResponse(SchemaModel):

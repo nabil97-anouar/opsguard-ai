@@ -11,7 +11,7 @@ class HealthResponse(BaseModel):
     check: Literal["liveness"] = "liveness"
     version: str
     environment: str
-    reasoner: Literal["deterministic-mock-v2"] = "deterministic-mock-v2"
+    reasoner: str
     timestamp: datetime
 
 

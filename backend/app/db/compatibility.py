@@ -26,6 +26,10 @@ def upgrade_evaluation_integrity(engine: Engine) -> None:
             "execution_kind": "VARCHAR(30) NOT NULL DEFAULT 'unknown'",
             "provider_version": "VARCHAR",
             "policy_version": "VARCHAR",
+            "reasoning_mode": "VARCHAR(30) NOT NULL DEFAULT 'legacy_unknown'",
+            "reasoning_schema_version": "VARCHAR",
+            "provider_request_ids": "JSON NOT NULL DEFAULT '[]'",
+            "provider_duration_ms": "INTEGER NOT NULL DEFAULT 0",
         },
         "security_harness_results": {
             "provenance": "VARCHAR(30) NOT NULL DEFAULT 'legacy_unknown'",

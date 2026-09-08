@@ -11,6 +11,7 @@ from app.agent.runner import (
     list_agent_runs as list_recent_agent_runs,
     run_agent_for_alert,
 )
+from app.agent.providers.errors import ProviderConfigurationError
 from app.db.session import get_session
 from app.schemas.agent_run import (
     AgentAssessmentResponse,
@@ -34,6 +35,8 @@ def create_agent_run_route(
 ) -> AgentRunResponse:
     try:
         result = run_agent_for_alert(session, alert_id=request.alert_id)
+    except ProviderConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from None
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -42,6 +45,13 @@ def create_agent_run_route(
         execution_kind=result.execution_kind,
         provider_version=result.provider_version,
         policy_version=result.policy_version,
+        llm_provider=result.llm_provider,
+        model_version=result.model_version,
+        reasoning_mode=result.reasoning_mode,
+        reasoning_schema_version=result.reasoning_schema_version,
+        provider_request_ids=result.provider_request_ids,
+        provider_duration_ms=result.provider_duration_ms,
+        total_tokens_used=result.total_tokens_used,
         status=result.status,
         agent_run_id=result.agent_run_id,
         alert_id=result.alert_id,
@@ -84,6 +94,11 @@ def get_agent_run_route(agent_run_id: UUID, session: Session = Depends(get_sessi
         status=agent_run.status,
         llm_provider=agent_run.llm_provider,
         model_version=agent_run.model_version,
+        reasoning_mode=agent_run.reasoning_mode,
+        reasoning_schema_version=agent_run.reasoning_schema_version,
+        provider_request_ids=agent_run.provider_request_ids,
+        provider_duration_ms=agent_run.provider_duration_ms,
+        total_tokens_used=agent_run.total_tokens_used,
         risk_level=agent_run.risk_level,
         approval_status=agent_run.approval_status,
         started_at=agent_run.started_at,
@@ -123,6 +138,9 @@ def list_agent_runs_route(session: Session = Depends(get_session)) -> AgentRunLi
                 approval_status=run.approval_status,
                 started_at=run.started_at,
                 completed_at=run.completed_at,
+                llm_provider=run.llm_provider,
+                model_version=run.model_version,
+                reasoning_mode=run.reasoning_mode,
             )
             for run in runs
         ],

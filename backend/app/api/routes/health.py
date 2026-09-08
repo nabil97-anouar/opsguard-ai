@@ -17,7 +17,7 @@ router = APIRouter(tags=["system"])
 def read_health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     """Process liveness only: no dependency connection, credentials or DDL."""
     return HealthResponse(status="healthy", version=settings.project_version,
-        environment=settings.environment, timestamp=datetime.now(UTC))
+        environment=settings.environment, reasoner=settings.llm_provider, timestamp=datetime.now(UTC))
 
 
 @router.get("/ready", response_model=ReadinessResponse, responses={503: {"model": ReadinessResponse}})

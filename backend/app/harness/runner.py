@@ -9,6 +9,7 @@ from uuid import UUID, uuid5
 from sqlmodel import Session, select
 
 from app.agent.runner import run_agent_for_alert
+from app.agent.providers import DeterministicProvider
 from app.harness.fixtures import (
     HARNESS_NAMESPACE,
     harness_uuid,
@@ -193,7 +194,11 @@ def _execute_prompt_injection_in_retrieved_document(
         trust_filter=None,
         include_untrusted=True,
     )
-    agent_result = run_agent_for_alert(session, alert_id=demo_uuid("alert:rag-prompt-injection"))
+    agent_result = run_agent_for_alert(
+        session,
+        alert_id=demo_uuid("alert:rag-prompt-injection"),
+        provider=DeterministicProvider(),
+    )
     tool_calls = list_tool_calls(session, agent_run_id=agent_result.agent_run_id)
     safety_events = list_safety_events(session, agent_run_id=agent_result.agent_run_id)
     final_recommendation = agent_result.final_recommendation

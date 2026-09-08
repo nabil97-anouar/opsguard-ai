@@ -4,7 +4,7 @@ import json
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     environment: Literal["development", "staging", "production"] = "development"
     api_v1_prefix: str = "/api/v1"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    llm_provider: Literal["deterministic", "openai"] = "deterministic"
+    openai_api_key: SecretStr | None = None
+    openai_model: str | None = None
+    llm_timeout_seconds: float = Field(default=30.0, ge=1, le=120)
+    llm_max_output_tokens: int = Field(default=1800, ge=256, le=8000)
 
     database_url: str = (
         "postgresql+psycopg://opsguard:opsguard@localhost:5432/opsguard_ai"

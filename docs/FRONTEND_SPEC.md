@@ -22,7 +22,7 @@ Completed investigations end with `waiting_for_human`. This is a terminal review
 
 | Section | What it displays |
 | --- | --- |
-| Backend overview | Health response, environment and deterministic reasoner, document counts, separate executable/blocked tool counts, and policy count. This liveness response does not check dependencies; `/ready` is the SQL readiness probe. |
+| System posture | Health response plus safe runtime-provider status, model/mode/schema, document trust counts, separate executable/blocked tool counts, and policy count. Liveness does not check dependencies; `/ready` is the SQL readiness probe. |
 | Sample data and tests | Seeding and harness controls, progress messages, and the most recent seed summary. |
 | Agent scenarios | Launch controls for the two bundled investigations. |
 | Scenario catalog | Static descriptions and labels for four sample incidents. These labels describe fixtures rather than current alert state. |
@@ -34,6 +34,9 @@ Completed investigations end with `waiting_for_human`. This is a terminal review
 | Watchdog findings | Exact verdict mapping, candidate/pending-review/blocked lifecycle, structured proposed actions separate from evidence, policy version, affected action IDs, finding IDs/types and blocking versus mandatory-review flags. Pending review explicitly says not approved; blocked artifacts are not review-valid. |
 | Security harness | Record-group ID; per-result executed/fixture/legacy provenance, scenario version and test level; recorded pass/fail and legacy partial counts; observed mandatory invariant checks and failures; expected and observed behavior; findings and metadata. Fixture passes never populate the executed pass-count indicator. |
 | Evaluation and reports | Stored report versus live preview; evaluation and harness IDs; execution timestamps, expected/completed case counts, scenario/test-level breakdown, provider/policy/metric-definition versions; each metric’s numerator, denominator, value and definition; failures, limitations, and pinned report links. |
+| Structured actions | Exact candidate/pending-review/blocked lifecycle with action ID/type, target, risk, approval requirement, evidence IDs, and rationale. |
+
+The visual system uses near-black surfaces, restrained matrix green telemetry, accessible red/amber policy semantics, selective monospace metadata, and a lightweight generated canvas background. The canvas is decorative and pointer-transparent, stops when the tab is hidden, and is disabled for reduced-motion users. No external image or font asset is required.
 
 ## Interpreting evidence and evaluation
 

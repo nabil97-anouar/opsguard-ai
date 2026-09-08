@@ -64,7 +64,7 @@ function summarizeStepOutput(step: AgentStep): string {
 
   if (step.node_name === "metacognitive_self_assessment") {
     if (typeof output.confidence_score === "number") {
-      return `Heuristic confidence ${output.confidence_score.toFixed(2)} with ${String(
+      return `Self-assessed confidence ${output.confidence_score.toFixed(2)} with ${String(
         output.uncertainty_level ?? "unknown"
       )} uncertainty.`;
     }
@@ -149,18 +149,19 @@ export function AgentRunTrace({
   }
 
   return (
-    <Card className="border-white/8 bg-white/[0.03]">
+    <Card className="matrix-panel">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-            Agent run trace
-          </p>
+          <p className="console-kicker">AGENT TRACE // EXECUTION TIMELINE</p>
           <CardTitle className="mt-3">
             {activeScenarioLabel ?? "Deterministic workflow trace"}
           </CardTitle>
           <CardDescription className="mt-3">
             Alert {agentRun.alert_id} · Run {agentRun.agent_run_id}
           </CardDescription>
+          <p className="mt-3 font-mono text-xs text-accentSoft">
+            {(agentRun.llm_provider ?? "PROVIDER UNKNOWN").toUpperCase()} / {agentRun.model_version ?? "MODEL UNKNOWN"} · {agentRun.reasoning_schema_version ?? "SCHEMA UNKNOWN"}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -171,7 +172,7 @@ export function AgentRunTrace({
         </div>
       </div>
 
-      <div className="mt-6 space-y-4">
+      <div className="trace-line mt-6 space-y-4">
         {agentRun.final_recommendation ? <p className="mt-4 text-sm text-slate-200">{recommendationLifecycle(agentRun.final_recommendation.lifecycle_state)}</p> : null}
         {humanApprovalBanner(agentRun.final_recommendation)}
 
@@ -194,7 +195,7 @@ export function AgentRunTrace({
 
           return (
             <div
-              className={`rounded-2xl border p-5 ${
+              className={`trace-node rounded-2xl border p-5 ${
                 highlightedNodes.has(step.node_name)
                   ? "border-accent/20 bg-accent/10"
                   : "border-white/8 bg-ink/60"
@@ -223,6 +224,11 @@ export function AgentRunTrace({
                       {new Date(step.created_at).toLocaleString()} ·{" "}
                       {step.duration_ms ?? 0} ms
                     </p>
+                    {typeof step.output_snapshot.provider_call === "object" ? (
+                      <p className="mt-2 font-mono text-xs text-accentSoft">
+                        Provider stage · {agentRun.llm_provider} · {String((step.output_snapshot.provider_call as Record<string, unknown>).duration_ms ?? 0)} ms
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 

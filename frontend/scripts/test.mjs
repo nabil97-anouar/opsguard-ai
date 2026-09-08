@@ -21,6 +21,8 @@ try {
       "components/dashboard/tool-registry-groups.tsx", "components/dashboard/harness-results-panel.tsx",
       "components/dashboard/tool-attempts-panel.tsx", "components/dashboard/tool-calls-panel.tsx", "components/dashboard/watchdog-findings-panel.tsx",
       "components/dashboard/evaluation-summary-card.tsx", "components/dashboard/agent-run-trace.tsx"
+      , "components/dashboard/system-status-card.tsx", "components/dashboard/structured-actions-panel.tsx",
+      "components/dashboard/matrix-rain-background.tsx"
     ].map((file) => join(projectRoot, file)),
     exclude: [join(projectRoot, "node_modules")]
   }));

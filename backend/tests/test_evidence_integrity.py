@@ -10,6 +10,9 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.agent import nodes
+from app.agent.actions import ProposedAction
+from app.agent.providers.base import ProviderCallResult, ProviderHypotheses
+from app.agent.providers.deterministic import DeterministicProvider
 from app.agent.runner import create_agent_run, run_agent_for_alert
 from app.agent.state import AgentState, EvidenceItem, PlannedToolCall
 from app.db import session as db_session
@@ -224,13 +227,17 @@ def test_missing_node_skips_targeted_tools_and_reduces_confidence(engine) -> Non
         assert "missing_operational_target" in result.self_assessment.risk_flags
 
 
-def test_unknown_hypothesis_reference_fails_validation(engine, monkeypatch) -> None:
-    monkeypatch.setattr(nodes, "generate_hypotheses", lambda *args: [{
-        "title": "Unsupported", "summary": "Unsupported", "confidence": 0.9,
-        "supporting_evidence": ["another-run:tool:missing"],
-    }])
+def test_unknown_hypothesis_reference_fails_validation(engine) -> None:
+    class InvalidHypothesisProvider(DeterministicProvider):
+        def hypothesize(self, _context):
+            return ProviderCallResult(value=ProviderHypotheses(hypotheses=[{
+                "title": "Unsupported", "summary": "Unsupported", "confidence": 0.9,
+                "supporting_evidence": ["another-run:tool:missing"],
+            }]), duration_ms=0)
+
     with Session(engine) as session:
-        result = run_agent_for_alert(session, alert_id=demo_uuid("alert:suspicious-gpu-usage"))
+        result = run_agent_for_alert(session, alert_id=demo_uuid("alert:suspicious-gpu-usage"),
+                                     provider=InvalidHypothesisProvider())
         assert result.status == "failed"
         assert result.error == "Hypothesis references evidence outside this run."
         assert result.final_recommendation is None
@@ -240,19 +247,19 @@ def test_unknown_hypothesis_reference_fails_validation(engine, monkeypatch) -> N
         assert steps[-1].node_name == "synthesize_hypotheses"
 
 
-def test_recommendation_cannot_cite_another_runs_evidence(engine, monkeypatch) -> None:
-    generate = nodes.generate_final_recommendation
+def test_recommendation_cannot_reference_another_runs_evidence(engine) -> None:
+    class InvalidRecommendationProvider(DeterministicProvider):
+        def recommend(self, context):
+            result = super().recommend(context)
+            action = ProposedAction(action_type="investigate", target="gpu-node-14",
+                supporting_evidence_ids=["another-run:tool:missing"], rationale="Unsupported reference.")
+            return ProviderCallResult(value=result.value.model_copy(update={"proposed_actions": [action]}), duration_ms=0)
 
-    def fabricated_reference(state):
-        recommendation = generate(state)
-        recommendation["citations"].append("tool://search_logs/another-run-call")
-        return recommendation
-
-    monkeypatch.setattr(nodes, "generate_final_recommendation", fabricated_reference)
     with Session(engine) as session:
-        result = run_agent_for_alert(session, alert_id=demo_uuid("alert:suspicious-gpu-usage"))
+        result = run_agent_for_alert(session, alert_id=demo_uuid("alert:suspicious-gpu-usage"),
+                                     provider=InvalidRecommendationProvider())
         assert result.status == "failed"
-        assert result.error == "Recommendation cites evidence outside this run."
+        assert result.error == "Recommendation actions reference evidence outside this run."
         assert result.final_recommendation is None
         failed_step = result.steps[-1]
         assert failed_step.node_name == "generate_recommendation"

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { Activity, ShieldCheck } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { API_BASE_URL } from "@/lib/config";
@@ -15,18 +15,18 @@ const navItems = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-ink/80 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
+    <header className="sticky top-0 z-50 border-b border-accent/20 bg-ink/90 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-[1480px] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link className="flex items-center gap-3" href="/">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent/40 bg-accent/10 text-accent">
+          <span className="matrix-icon flex h-10 w-10 items-center justify-center border border-accent/40 bg-accent/10 text-accent">
             <ShieldCheck className="h-5 w-5" />
           </span>
           <div>
-            <p className="font-display text-sm uppercase tracking-[0.28em] text-accentSoft">
-              OpsGuard AI
+            <p className="font-display text-sm font-semibold uppercase tracking-[0.24em] text-accent">
+              OPSGUARD // AI
             </p>
             <p className="text-sm text-slate-400">
-              Incident investigation and policy review
+              Evidence control plane
             </p>
           </div>
         </Link>
@@ -45,7 +45,10 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="hidden items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 lg:flex">
+            <Activity className="h-3.5 w-3.5 text-accent" /> Runtime telemetry
+          </span>
           <a
             className={buttonVariants({ variant: "ghost" })}
             href={`${API_BASE_URL}/health`}

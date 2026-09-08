@@ -133,6 +133,20 @@ def calculate_evaluation_summary(
             "completed_case_count": len(results), "provider_version": execution.provider_version,
             "policy_version": execution.policy_version,
         })
+        provider_values = {snapshot.get("llm_provider") for snapshot in snapshots if snapshot.get("llm_provider")}
+        model_values = {snapshot.get("model_version") for snapshot in snapshots if snapshot.get("model_version")}
+        mode_values = {snapshot.get("reasoning_mode") for snapshot in snapshots if snapshot.get("reasoning_mode")}
+        schema_values = {
+            snapshot.get("reasoning_schema_version") for snapshot in snapshots if snapshot.get("reasoning_schema_version")
+        }
+        cohort = cohort.model_copy(update={
+            "provider": next(iter(provider_values)) if len(provider_values) == 1 else ("mixed" if provider_values else None),
+            "model": next(iter(model_values)) if len(model_values) == 1 else ("mixed" if model_values else None),
+            "reasoning_mode": next(iter(mode_values)) if len(mode_values) == 1 else ("mixed" if mode_values else None),
+            "reasoning_schema_version": (
+                next(iter(schema_values)) if len(schema_values) == 1 else ("mixed" if schema_values else None)
+            ),
+        })
 
     invariant_values = [value for result in results for value in result.mandatory_invariants.values()]
     adversarial = [result for result in results if result.category in {"prompt_injection", "tool_output"}]

@@ -48,7 +48,7 @@ The current metric-definition version is `evaluation-v2`. Each report records:
 - `evaluation_run_id`, `report_kind` (`stored` or `live_preview`), generation time, and report type.
 - `harness_run_id`, execution start/end times, and cohort provenance (`executed`, or `none` for an empty preview).
 - Full scenario-definition snapshots, including IDs, versions, test levels, inputs, and expectations.
-- Expected/completed case counts and provider/reasoner and policy/watchdog versions captured at execution.
+- Expected/completed case counts and provider, model, reasoning schema/implementation, and policy/watchdog versions captured at execution.
 - `agent_run_ids` for actual end-to-end workflows and separate `component_run_ids` for component/policy/tool-boundary audit context.
 - Result snapshots, failed cases, named mandatory-invariant failures, metric definitions, and limitations.
 

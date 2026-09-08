@@ -2,7 +2,7 @@ import { AlertTriangle, Cpu, Database, ShieldCheck } from "lucide-react";
 
 import { SafetyBadge } from "@/components/dashboard/safety-badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import type { HealthPayload } from "@/lib/types";
+import type { HealthPayload, ReasoningRuntime } from "@/lib/types";
 
 type SystemStatusCardProps = {
   health: HealthPayload | null;
@@ -12,25 +12,8 @@ type SystemStatusCardProps = {
   blockedToolsCount: number;
   policiesCount: number;
   isLoading: boolean;
+  reasoning: ReasoningRuntime | null;
 };
-
-const systemRows = [
-  {
-    label: "Backend API",
-    icon: Cpu,
-    value: (health: HealthPayload | null) => health?.status ?? "loading"
-  },
-  {
-    label: "Environment",
-    icon: ShieldCheck,
-    value: (health: HealthPayload | null) => health?.environment ?? "local"
-  },
-  {
-    label: "Reasoner",
-    icon: Database,
-    value: (health: HealthPayload | null) => health?.reasoner ?? "mock"
-  }
-];
 
 export function SystemStatusCard({
   health,
@@ -39,27 +22,33 @@ export function SystemStatusCard({
   executableToolsCount,
   blockedToolsCount,
   policiesCount,
-  isLoading
+  isLoading,
+  reasoning
 }: SystemStatusCardProps) {
+  const systemRows = [
+    { label: "System", icon: Cpu, value: health?.status ?? "unavailable", detail: health?.environment ?? "no response" },
+    { label: "Reasoning", icon: Database, value: reasoning?.provider ?? "unavailable", detail: reasoning?.model ?? "not configured" },
+    { label: "Provider mode", icon: ShieldCheck, value: reasoning?.available ? reasoning.mode : "unavailable", detail: reasoning?.schema_version ?? "schema unavailable" }
+  ];
   return (
-    <Card className="relative overflow-hidden border-accent/20 bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-accent/10">
+    <Card className="matrix-panel relative overflow-hidden">
       <div className="absolute right-8 top-8 h-24 w-24 rounded-full bg-accent/20 blur-3xl" />
       <div className="relative">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-accentSoft">
-              Backend overview
+              System posture
             </p>
-            <CardTitle className="mt-3">Deterministic local investigation</CardTitle>
+            <CardTitle className="mt-3">Runtime authority map</CardTitle>
             <CardDescription className="mt-3 max-w-xl">
-              The backend uses deterministic reasoning and local tool adapters.
-              Investigations record findings and recommendations for manual review.
+              Runtime data identifies the active provider. Evidence validation, tool policy,
+              watchdog decisions, and review requirements remain application-owned.
             </CardDescription>
           </div>
 
           <div className="flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 py-2 font-mono text-xs uppercase tracking-[0.18em] text-success">
             <ShieldCheck className="h-3.5 w-3.5" />
-            {isLoading ? "Syncing" : "Local reasoning"}
+            {isLoading ? "Syncing" : reasoning?.available ? "Provider available" : "Provider unavailable"}
           </div>
         </div>
 
@@ -81,7 +70,10 @@ export function SystemStatusCard({
                 </div>
               </div>
 
-              <SafetyBadge value={row.value(health)} />
+              <div className="text-right">
+                <SafetyBadge value={row.value} />
+                <p className="mt-2 max-w-52 break-all font-mono text-[10px] text-slate-500">{row.detail}</p>
+              </div>
             </div>
           ))}
         </div>

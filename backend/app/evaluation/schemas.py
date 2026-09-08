@@ -30,6 +30,10 @@ class EvaluationCohort(BaseModel):
     expected_case_count: int = 0
     completed_case_count: int = 0
     provider_version: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    reasoning_mode: str | None = None
+    reasoning_schema_version: str | None = None
     policy_version: str | None = None
 
 

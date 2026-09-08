@@ -32,6 +32,7 @@ import {
   getAgentRunDetail,
   listToolAttempts,
   getBackendHealth,
+  getReasoningRuntime,
   getEvaluationSummary,
   getErrorMessage,
   getHarnessRunResults,
@@ -56,10 +57,13 @@ import {
   type HarnessScenarioResponse,
   type HealthPayload,
   type RetrievalChunk,
+  type ReasoningRuntime,
   type ToolListItem,
   type WatchdogPolicyItem,
 } from "@/lib/types";
 import { executedHarnessRunId, executionProvenanceLabel, harnessExecutionCounts, loadRecordedAgentRun, recordedRetrievalChunks, toolRegistryGroups } from "@/lib/dashboard-data";
+import { MatrixRainBackground } from "@/components/dashboard/matrix-rain-background";
+import { StructuredActionsPanel } from "@/components/dashboard/structured-actions-panel";
 
 type ScenarioKind = "gpu" | "prompt";
 
@@ -139,6 +143,7 @@ function formatTimestamp(value: string | null | undefined): string {
 
 export function DashboardShell() {
   const [health, setHealth] = useState<HealthPayload | null>(null);
+  const [reasoning, setReasoning] = useState<ReasoningRuntime | null>(null);
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [tools, setTools] = useState<ToolListItem[]>([]);
   const [policies, setPolicies] = useState<WatchdogPolicyItem[]>([]);
@@ -179,6 +184,7 @@ export function DashboardShell() {
     const issues: string[] = [];
     const results = await Promise.allSettled([
       getBackendHealth(),
+      getReasoningRuntime(),
       listDocuments(),
       listTools(),
       listWatchdogPolicies(),
@@ -186,7 +192,7 @@ export function DashboardShell() {
       listToolAttempts(),
     ]);
 
-    const [healthResult, documentsResult, toolsResult, policiesResult, scenariosResult, attemptsResult] = results;
+    const [healthResult, reasoningResult, documentsResult, toolsResult, policiesResult, scenariosResult, attemptsResult] = results;
     if (attemptsResult.status === "fulfilled") setRecentAttempts(attemptsResult.value.items);
     else issues.push(getErrorMessage(attemptsResult.reason));
 
@@ -195,6 +201,13 @@ export function DashboardShell() {
     } else {
       issues.push(getErrorMessage(healthResult.reason));
       setHealth(null);
+    }
+
+    if (reasoningResult.status === "fulfilled") {
+      setReasoning(reasoningResult.value);
+    } else {
+      issues.push(getErrorMessage(reasoningResult.reason));
+      setReasoning(null);
     }
 
     if (documentsResult.status === "fulfilled") {
@@ -407,30 +420,30 @@ export function DashboardShell() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 pb-20 pt-10 lg:px-8">
+    <main className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-8 px-4 pb-20 pt-8 sm:px-6 lg:px-8">
+      <MatrixRainBackground />
       <section
         className="grid gap-8 xl:grid-cols-[1.02fr_0.98fr] xl:items-start"
         id="overview"
       >
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-4 py-2 text-xs uppercase tracking-[0.28em] text-accentSoft">
-            <Sparkles className="h-3.5 w-3.5" />
-            OpsGuard AI
+          <div className="console-kicker">
+            <span className="status-dot" aria-hidden="true" />
+            SYSTEM POSTURE / LIVE TELEMETRY
           </div>
 
           <h1 className="mt-6 max-w-4xl font-display text-5xl font-semibold leading-tight text-white md:text-6xl">
-            Incident triage with evidence and policy checks
+            Evidence-aware incident reasoning under deterministic control
           </h1>
 
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
-            Inspect runbook context, local tool responses, investigation traces,
-            and adversarial test results.
+            Trace provider reasoning, evidence identity, tool authorization, watchdog
+            decisions, and versioned evaluation cohorts from one operations console.
           </p>
 
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">
-            Investigations use deterministic reasoning and local infrastructure responses.
-            Review retrieved citations, uncertainty, and watchdog findings before deciding
-            what to do outside the system.
+            The model proposes. Application-owned trust, tool policy, watchdog rules,
+            and the terminal human-review boundary decide what may proceed.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -443,7 +456,7 @@ export function DashboardShell() {
             >
               Inspect harness evidence
             </a>
-            <SafetyBadge value="deterministic local reasoning" />
+            <SafetyBadge value={`${reasoning?.provider ?? "reasoning unavailable"} · ${reasoning?.model ?? "unknown"}`} />
             <SafetyBadge value="human review required" />
             <SafetyBadge value="no shell execution" />
           </div>
@@ -493,6 +506,7 @@ export function DashboardShell() {
           executableToolsCount={toolGroups[0].tools.length}
           blockedToolsCount={toolGroups[1].tools.length}
           trustedDocumentsCount={trustedDocumentsCount}
+          reasoning={reasoning}
         />
       </section>
 
@@ -696,6 +710,10 @@ export function DashboardShell() {
 
       <section className="grid gap-6">
         <WatchdogFindingsPanel recommendation={agentRun?.final_recommendation ?? null} />
+      </section>
+
+      <section className="grid gap-6">
+        <StructuredActionsPanel recommendation={agentRun?.final_recommendation ?? null} />
       </section>
 
       <section className="grid gap-6" id="harness">

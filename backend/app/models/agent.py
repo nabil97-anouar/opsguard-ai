@@ -18,8 +18,12 @@ class AgentRun(UUIDPrimaryKeyMixin, table=True):
     provider_version: str | None = None
     policy_version: str | None = None
     status: str = Field(default="running", max_length=30, index=True)
-    llm_provider: str = Field(default="mock", max_length=50)
+    llm_provider: str = Field(default="legacy_unknown", max_length=50)
     model_version: str | None = Field(default=None, max_length=50)
+    reasoning_mode: str = Field(default="legacy_unknown", max_length=30)
+    reasoning_schema_version: str | None = Field(default=None, max_length=50)
+    provider_request_ids: list[str] = Field(default_factory=list, sa_column=json_column())
+    provider_duration_ms: int = 0
     total_steps: int = 0
     total_tool_calls: int = 0
     total_tokens_used: int | None = None

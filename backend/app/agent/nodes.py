@@ -11,7 +11,9 @@ from typing import Any, Callable
 from sqlmodel import Session
 
 from app.agent.actions import ProposedAction, RecommendationState
-from app.agent.mock_llm import assess_confidence, classify_alert, generate_final_recommendation, generate_hypotheses
+from app.agent.providers import LLMProvider, create_provider
+from app.agent.providers.base import ProviderCallResult
+from app.agent.providers.context import build_provider_context
 from app.agent.planner import plan_tools_for_state
 from app.agent.schemas import StepExecutionSummary
 from app.agent.state import (
@@ -71,6 +73,20 @@ def _append_missing_evidence(state: AgentState, items: list[str]) -> None:
     for item in items:
         if item and item not in state.missing_evidence:
             state.missing_evidence.append(item)
+
+
+def _record_provider_call(agent_run: AgentRun, result: ProviderCallResult) -> dict[str, Any]:
+    agent_run.provider_duration_ms += result.duration_ms
+    if result.request_id and result.request_id not in agent_run.provider_request_ids:
+        agent_run.provider_request_ids = [*agent_run.provider_request_ids, result.request_id]
+    if result.total_tokens is not None:
+        agent_run.total_tokens_used = (agent_run.total_tokens_used or 0) + result.total_tokens
+    return {
+        "request_id": result.request_id,
+        "duration_ms": result.duration_ms,
+        "input_tokens": result.input_tokens,
+        "output_tokens": result.output_tokens,
+    }
 
 
 def _record_safety_event(
@@ -226,17 +242,25 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
     )
 
 
-def classify_alert_node(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
+def classify_alert_node(
+    session: Session,
+    agent_run: AgentRun,
+    state: AgentState,
+    provider: LLMProvider | None = None,
+) -> AgentState:
+    provider = provider or create_provider()
+
     def handler(_: AgentStep) -> dict[str, Any]:
         if state.alert_summary is None:
             raise ValueError("Alert summary is required before classification.")
 
-        classification = classify_alert(state.alert_summary.model_dump(mode="json"))
+        result = provider.classify(build_provider_context(state, "classification"))
+        classification = result.value.model_dump(mode="json")
         state.alert_classification = classification
         _append_missing_evidence(state, list(classification.get("initial_missing_evidence", [])))
         agent_run.risk_level = str(classification.get("risk_level") or agent_run.risk_level)
 
-        return classification
+        return {**classification, "provider_call": _record_provider_call(agent_run, result)}
 
     return _run_node(
         session,
@@ -533,15 +557,17 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
     )
 
 
-def synthesize_hypotheses(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
+def synthesize_hypotheses(
+    session: Session,
+    agent_run: AgentRun,
+    state: AgentState,
+    provider: LLMProvider | None = None,
+) -> AgentState:
+    provider = provider or create_provider()
+
     def handler(_: AgentStep) -> dict[str, Any]:
-        alert_payload = state.alert_summary.model_dump(mode="json") if state.alert_summary else {}
-        alert_payload["classification"] = state.alert_classification
-        hypotheses = generate_hypotheses(
-            alert_payload,
-            [item.model_dump(mode="json") for item in state.evidence_items],
-        )
-        validated_hypotheses = [HypothesisItem(**item) for item in hypotheses]
+        result = provider.hypothesize(build_provider_context(state, "hypotheses"))
+        validated_hypotheses = [HypothesisItem.model_validate(item.model_dump()) for item in result.value.hypotheses]
         known_evidence = {item.evidence_id for item in state.evidence_items}
         if any(set(item.supporting_evidence) - known_evidence for item in validated_hypotheses):
             raise ValueError("Hypothesis references evidence outside this run.")
@@ -551,6 +577,7 @@ def synthesize_hypotheses(session: Session, agent_run: AgentRun, state: AgentSta
 
         return {
             "hypotheses": [item.model_dump(mode="json") for item in state.hypotheses],
+            "provider_call": _record_provider_call(agent_run, result),
         }
 
     return _run_node(
@@ -566,18 +593,17 @@ def synthesize_hypotheses(session: Session, agent_run: AgentRun, state: AgentSta
     )
 
 
-def metacognitive_self_assessment(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
+def metacognitive_self_assessment(
+    session: Session,
+    agent_run: AgentRun,
+    state: AgentState,
+    provider: LLMProvider | None = None,
+) -> AgentState:
+    provider = provider or create_provider()
+
     def handler(step: AgentStep) -> dict[str, Any]:
-        alert_payload = state.alert_summary.model_dump(mode="json") if state.alert_summary else {}
-        alert_payload["classification"] = state.alert_classification
-        assessment = assess_confidence(
-            alert_payload,
-            [item.model_dump(mode="json") for item in state.evidence_items],
-            state.suspicious_items,
-            state.missing_evidence,
-            missing_targets=state.missing_targets,
-        )
-        state.self_assessment = AssessmentSnapshot(**assessment)
+        result = provider.assess(build_provider_context(state, "assessment"))
+        state.self_assessment = AssessmentSnapshot.model_validate(result.value.model_dump())
         state.requires_human_approval = True
 
         session.add(
@@ -596,7 +622,10 @@ def metacognitive_self_assessment(session: Session, agent_run: AgentRun, state: 
             )
         )
 
-        return state.self_assessment.model_dump(mode="json")
+        return {
+            **state.self_assessment.model_dump(mode="json"),
+            "provider_call": _record_provider_call(agent_run, result),
+        }
 
     return _run_node(
         session,
@@ -613,15 +642,32 @@ def metacognitive_self_assessment(session: Session, agent_run: AgentRun, state: 
     )
 
 
-def generate_recommendation(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
+def generate_recommendation(
+    session: Session,
+    agent_run: AgentRun,
+    state: AgentState,
+    provider: LLMProvider | None = None,
+) -> AgentState:
+    provider = provider or create_provider()
+
     def handler(step: AgentStep) -> dict[str, Any]:
-        recommendation_payload = generate_final_recommendation(state.model_dump(mode="json"))
-        recommendation = FinalRecommendation(**recommendation_payload)
+        result = provider.recommend(build_provider_context(state, "recommendation"))
         expected_evidence = [item.model_dump(mode="json") for item in state.evidence_items]
-        if recommendation.evidence != expected_evidence:
-            raise ValueError("Recommendation must retain the run's complete evidence snapshots.")
-        if set(recommendation.citations) - {item.citation for item in state.evidence_items}:
-            raise ValueError("Recommendation cites evidence outside this run.")
+        recommendation = FinalRecommendation(
+            **result.value.model_dump(mode="json"),
+            evidence=expected_evidence,
+            citations=[item.citation for item in state.evidence_items],
+            blocked_actions_requiring_human_approval=[item.model_dump(mode="json") for item in state.blocked_tools],
+            requires_human_approval=True,
+        )
+        known_evidence = {item.evidence_id for item in state.evidence_items}
+        action_references = {
+            reference
+            for action in recommendation.proposed_actions
+            for reference in action.supporting_evidence_ids
+        }
+        if action_references - known_evidence:
+            raise ValueError("Recommendation actions reference evidence outside this run.")
         state.final_recommendation = recommendation
 
         # Candidate snapshots are intentionally persisted as unvalidated. The
@@ -643,7 +689,10 @@ def generate_recommendation(session: Session, agent_run: AgentRun, state: AgentS
                 target=item.target, supporting_evidence_ids=evidence_ids, rationale=item.rationale,
                 risk_level="high", requires_approval=True) for item in state.blocked_tools)
 
-        return state.final_recommendation.model_dump(mode="json")
+        return {
+            **state.final_recommendation.model_dump(mode="json"),
+            "provider_call": _record_provider_call(agent_run, result),
+        }
 
     return _run_node(
         session,

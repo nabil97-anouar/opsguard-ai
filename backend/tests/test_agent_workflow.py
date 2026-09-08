@@ -133,7 +133,9 @@ def test_agent_run_api_endpoints(monkeypatch) -> None:
     assert detail_response.status_code == 200
     detail_payload = detail_response.json()
     assert detail_payload["agent_run_id"] == agent_run_id
-    assert detail_payload["model_version"] == "deterministic-mock-v2"
+    assert detail_payload["llm_provider"] == "deterministic"
+    assert detail_payload["model_version"] == "local-rules-v3"
+    assert detail_payload["reasoning_schema_version"] == "reasoning-v1"
     assert detail_payload["tool_calls"]
     assert detail_payload["final_recommendation"]["requires_human_approval"] is True
 

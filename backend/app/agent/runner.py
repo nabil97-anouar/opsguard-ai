@@ -20,13 +20,11 @@ from app.agent.nodes import (
     watchdog_policy_check,
 )
 from app.agent.schemas import AgentRunResult, StepExecutionSummary
+from app.agent.providers import LLMProvider, create_provider
 from app.agent.state import AgentState, AssessmentSnapshot, FinalRecommendation
-from app.core.versions import POLICY_VERSION, PROVIDER_VERSION
+from app.core.versions import POLICY_VERSION
 from app.models import AgentRun, AgentStep, Alert, SelfAssessment, ToolCall
 from app.models.base import utcnow
-
-RUNNER_MODEL_VERSION = PROVIDER_VERSION
-
 
 def _ensure_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -40,6 +38,13 @@ def _state_result(state: AgentState, agent_run: AgentRun) -> AgentRunResult:
         execution_kind=agent_run.execution_kind,
         provider_version=agent_run.provider_version,
         policy_version=agent_run.policy_version,
+        llm_provider=agent_run.llm_provider,
+        model_version=agent_run.model_version,
+        reasoning_mode=agent_run.reasoning_mode,
+        reasoning_schema_version=agent_run.reasoning_schema_version,
+        provider_request_ids=agent_run.provider_request_ids,
+        provider_duration_ms=agent_run.provider_duration_ms,
+        total_tokens_used=agent_run.total_tokens_used,
         agent_run_id=agent_run.id,
         alert_id=agent_run.alert_id,
         status=agent_run.status,
@@ -67,20 +72,26 @@ def _final_recommendation_from_steps(steps: list[AgentStep]) -> FinalRecommendat
     return None
 
 
-def create_agent_run(session: Session, *, alert_id: UUID) -> AgentRun:
+def create_agent_run(session: Session, *, alert_id: UUID, provider: LLMProvider | None = None) -> AgentRun:
     alert = session.get(Alert, alert_id)
     if alert is None:
         raise ValueError(f"Alert '{alert_id}' was not found.")
 
+    provider = provider or create_provider()
+    identity = provider.identity
     agent_run = AgentRun(
         alert_id=alert_id,
         provenance="executed",
         execution_kind="agent_workflow",
-        provider_version=PROVIDER_VERSION,
+        provider_version=identity.implementation_version,
         policy_version=POLICY_VERSION,
         status="running",
-        llm_provider="mock",
-        model_version=RUNNER_MODEL_VERSION,
+        llm_provider=identity.provider,
+        model_version=identity.model,
+        reasoning_mode=identity.mode,
+        reasoning_schema_version=identity.schema_version,
+        provider_request_ids=[],
+        provider_duration_ms=0,
         total_steps=0,
         total_tool_calls=0,
         total_tokens_used=0,
@@ -103,19 +114,25 @@ def create_agent_run(session: Session, *, alert_id: UUID) -> AgentRun:
     return agent_run
 
 
-def run_agent_for_alert(session: Session, *, alert_id: UUID) -> AgentRunResult:
-    agent_run = create_agent_run(session, alert_id=alert_id)
+def run_agent_for_alert(
+    session: Session,
+    *,
+    alert_id: UUID,
+    provider: LLMProvider | None = None,
+) -> AgentRunResult:
+    provider = provider or create_provider()
+    agent_run = create_agent_run(session, alert_id=alert_id, provider=provider)
     state = AgentState(alert_id=alert_id, agent_run_id=agent_run.id)
 
     try:
         ingest_alert(session, agent_run, state)
-        classify_alert_node(session, agent_run, state)
+        classify_alert_node(session, agent_run, state, provider)
         retrieve_context(session, agent_run, state)
         plan_tool_calls(session, agent_run, state)
         execute_safe_tools(session, agent_run, state)
-        synthesize_hypotheses(session, agent_run, state)
-        metacognitive_self_assessment(session, agent_run, state)
-        generate_recommendation(session, agent_run, state)
+        synthesize_hypotheses(session, agent_run, state, provider)
+        metacognitive_self_assessment(session, agent_run, state, provider)
+        generate_recommendation(session, agent_run, state, provider)
         watchdog_policy_check(session, agent_run, state)
         wait_for_human_approval(session, agent_run, state)
         session.refresh(agent_run)

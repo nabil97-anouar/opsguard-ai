@@ -36,7 +36,9 @@ The [watchdog](../backend/app/watchdog/policies.py) checks structured action int
 
 Decisions expose exact `verdict`, severity, finding IDs/types, affected action IDs, `blocking`, `mandatory_review`, reason, and `policy_version: watchdog-policy-v3`. `status` remains an exact compatibility alias. Explicit action approval requirements produce review findings; disruptive intent blocks regardless of a caller's risk or approval label. These checks remain deterministic and incomplete for arbitrary language. A policy verdict does not authorize tool dispatch or infrastructure operation.
 
-The current reasoning layer is deterministic and does not interpret retrieved instructions as a language model would. Harness results for this implementation do not establish injection resistance for a future model provider.
+The external provider receives explicitly separated application constraints, task data, and untrusted evidence. Its Pydantic-validated structured output is still untrusted. Evidence IDs must resolve to the same run, action types and confidence bounds are constrained, and invalid output fails the workflow. Prompt wording is supplemental: the provider cannot change registry capabilities, trust labels, watchdog rules, audit ownership, or the terminal review requirement. The model has no direct tool-calling channel.
+
+OpenAI credentials are backend-only `SecretStr` configuration. They are not included in prompts, API responses, frontend settings, step snapshots, evaluation snapshots, or tool audits. Provider exceptions map to bounded domain errors; persisted/request errors do not include raw SDK text. Retrieved evidence is sent to OpenAI only when that provider is explicitly selected.
 
 ## Human review and drafts
 
@@ -64,7 +66,7 @@ The [FastAPI application](../backend/app/main.py) has CORS configuration and res
 
 The explicit seeding and table-creation endpoints reject `ENVIRONMENT=production`, but that setting does not harden the application: harness/evaluation paths can still seed or reset data. Ordinary routes perform no DDL; schema initialization is an explicit command or development setup endpoint Use disposable fixture databases for these workflows and keep the API on a trusted local network boundary.
 
-The current runner requires no external model keys. Unused provider, API-key and Qdrant configuration fields have been removed. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings.
+The default deterministic provider requires no external key. OpenAI mode requires backend-only key/model configuration and fails instead of silently falling back. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings. Qdrant and other provider settings remain absent.
 
 ## Interpreting evaluation
 

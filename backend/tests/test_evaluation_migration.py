@@ -28,7 +28,8 @@ def test_additive_upgrade_preserves_legacy_rows_and_never_invents_execution(monk
     SecurityHarnessRun.__table__.drop(engine)
     with engine.begin() as connection:
         for table, columns in {
-            "agent_runs": ["provenance", "execution_kind", "provider_version", "policy_version"],
+            "agent_runs": ["provenance", "execution_kind", "provider_version", "policy_version",
+                "reasoning_mode", "reasoning_schema_version", "provider_request_ids", "provider_duration_ms"],
             "security_harness_results": ["provenance", "test_level", "scenario_version"],
         }.items():
             for column in columns:
@@ -36,6 +37,9 @@ def test_additive_upgrade_preserves_legacy_rows_and_never_invents_execution(monk
     create_db_and_tables(engine)
     create_db_and_tables(engine)  # Upgrade is idempotent.
     assert "evaluation_reports" in inspect(engine).get_table_names()
+    assert {"reasoning_mode", "reasoning_schema_version", "provider_request_ids", "provider_duration_ms"} <= {
+        column["name"] for column in inspect(engine).get_columns("agent_runs")
+    }
     with Session(engine) as session:
         assert session.get(AgentRun, legacy_id).provenance == "legacy_unknown"
         assert session.get(AgentRun, legacy_id).execution_kind == "unknown"
@@ -80,7 +84,7 @@ def test_agent_api_distinguishes_fixture_history_from_execution_on_demo_input(mo
     assert run["status"] == "waiting_for_human"
     assert run["provenance"] == "executed"
     assert run["execution_kind"] == "agent_workflow"
-    assert run["provider_version"] == "deterministic-mock-v2"
+    assert run["provider_version"] == "deterministic-v3"
     assert run["policy_version"] == "watchdog-policy-v3"
     detail = client.get(f"/api/v1/agent/runs/{run['agent_run_id']}").json()
     assert detail["provenance"] == "executed"

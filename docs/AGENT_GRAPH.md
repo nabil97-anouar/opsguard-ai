@@ -24,13 +24,13 @@ The node names above are the names stored in traces. This is a sequential Python
 | Node | Current behavior |
 | --- | --- |
 | `ingest_alert` | Load the alert, build its summary, and add its description as untrusted evidence. |
-| `classify_alert` | Use deterministic keyword rules to assign an incident category, query hint, and initial evidence gaps. |
+| `classify_alert` | Ask the configured provider for a typed incident category, query hint, self-assessed confidence, and initial evidence gaps. |
 | `retrieve_context` | Run local lexical retrieval and preserve excerpts, citations, trust labels, and suspicious-content indicators. |
 | `plan_tool_calls` | Choose tools for the incident category; omit target-specific checks and proposals when the alert lacks a valid target. |
 | `execute_safe_tools` | Record typed outcomes and audit IDs; only successful observations with persisted identities become evidence. Failed or blocked attempts create evidence gaps. |
-| `synthesize_hypotheses` | Select scenario-specific hypothesis templates and validate supporting IDs against this run's evidence. |
-| `metacognitive_self_assessment` | Calculate a heuristic confidence estimate, uncertainty, capability label, and missing-evidence notes. |
-| `generate_recommendation` | Assemble typed proposals and persist an unvalidated candidate; no ticket yet. |
+| `synthesize_hypotheses` | Ask the provider for structured hypotheses and validate supporting IDs against this run's evidence. |
+| `metacognitive_self_assessment` | Record bounded self-assessed confidence, uncertainty, capability label, and missing-evidence notes. Deterministic mode uses its documented arithmetic heuristic. |
+| `generate_recommendation` | Validate provider narrative/actions, attach the application-owned evidence snapshot, and persist an unvalidated candidate; no ticket yet. |
 | `watchdog_policy_check` | Evaluate eight policies, persist a typed decision, mark the recommendation pending review or blocked, then create the labeled local ticket for recognized categories. |
 | `wait_for_human_approval` | End with run status `waiting_for_human` and approval status `pending`. |
 
@@ -40,9 +40,11 @@ Node implementations are in [nodes.py](../backend/app/agent/nodes.py); tool sele
 
 [AgentState](../backend/app/agent/state.py) is a Pydantic model containing the alert summary, classification, retrieved context, tool results, evidence, hypotheses, planned and blocked tools, assessment, recommendation, watchdog decision, trace, and errors.
 
-[mock_llm.py](../backend/app/agent/mock_llm.py) implements all current reasoning as local Python rules. It recognizes GPU abuse, SSH brute-force, storage inode pressure, prompt injection, and an unknown category. There are no external model calls or interchangeable provider implementations. New run metadata records `mock` and `deterministic-mock-v2`, distinguishing the evidence-integrity behavior from older runs. Provider-related environment settings do not switch this runner to a real model.
+[providers](../backend/app/agent/providers) defines the typed interface, request/result contracts, context builder, deterministic implementation, OpenAI Responses implementation, error mapping, and configuration factory. The deterministic implementation preserves the existing local rules in [deterministic_rules.py](../backend/app/agent/deterministic_rules.py) behind `DeterministicProvider`. It remains the default and the mandatory CI/harness provider.
 
-Confidence is an arithmetic function of classification, evidence count, suspicious items, and missing evidence. Missing operational targets cap it at 0.4, preventing omitted target checks from increasing apparent certainty. This is a conservative engineering limit, not a calibrated probability. Assessment decisions such as `retrieve_more` and `stop_and_request_human_review` are recorded labels; they do not change node routing.
+Provider context contains the current alert, run-scoped evidence snapshots and IDs, trust/status metadata, suspicious observations, evidence/target gaps, prior hypotheses, blocked action definitions, and the allowed action vocabulary. It contains no database objects, API credentials, handler implementations, or unrelated history. OpenAI output uses a Pydantic schema and cannot directly invoke tools. Each run records provider, model, local/external mode, implementation/schema version, provider-call duration, safe response IDs, and optional token counts.
+
+Deterministic confidence is an arithmetic function of classification, evidence count, suspicious items, and missing evidence. OpenAI confidence is model self-assessment. Both are constrained to `[0,1]` and are not calibrated probabilities. Application-level gaps and watchdog checks remain authoritative. Assessment decisions such as `retrieve_more` and `stop_and_request_human_review` are recorded labels; they do not change node routing.
 
 ## Evidence identity and outcomes
 

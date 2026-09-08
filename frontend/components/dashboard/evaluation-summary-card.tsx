@@ -35,8 +35,8 @@ export function EvaluationSummaryCard({
   }, {}) ?? {};
 
   return (
-    <Card className="border-white/8 bg-white/[0.03]" id="evaluation">
-      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Evaluation and reports</p>
+    <Card className="matrix-panel" id="evaluation">
+      <p className="console-kicker">EVALUATION // STORED COHORT</p>
       <CardTitle className="mt-3">Evaluation of an explicit execution cohort</CardTitle>
       <CardDescription className="mt-3 max-w-3xl">
         Each stored report records one harness execution and its linked observations.
@@ -77,6 +77,8 @@ export function EvaluationSummaryCard({
                 ["Completed / expected scenarios", `${cohort.completed_case_count} / ${cohort.expected_case_count}`],
                 ["Report generated", summary.generated_at],
                 ["Provider / reasoner version", cohort.provider_version ?? "Not recorded"],
+                ["Provider / model", `${cohort.provider ?? "Not recorded"} / ${cohort.model ?? "Not recorded"}`],
+                ["Reasoning mode / schema", `${cohort.reasoning_mode ?? "Not recorded"} / ${cohort.reasoning_schema_version ?? "Not recorded"}`],
                 ["Policy / watchdog version", cohort.policy_version ?? "Not recorded"],
                 ["Metric definitions version", summary.schema_version],
                 ["Scenario / test-level breakdown", Object.entries(levelCounts).map(([level, count]) => `${level}: ${count}`).join(" · ") || "No scenarios"],

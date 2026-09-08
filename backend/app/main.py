@@ -17,6 +17,7 @@ from app.api.routes.evaluation import router as evaluation_router
 from app.api.routes.harness import router as harness_router
 from app.api.routes.health import router as health_router
 from app.api.routes.rag import router as rag_router
+from app.api.routes.runtime import router as runtime_router
 from app.api.routes.tools import router as tools_router
 from app.api.routes.watchdog import router as watchdog_router
 from app.core.config import get_settings
@@ -34,7 +35,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         "application_starting",
         extra={
             "environment": settings.environment,
-            "reasoner": "deterministic-mock-v2",
+            "reasoner": settings.llm_provider,
         },
     )
     yield
@@ -90,6 +91,7 @@ def create_application() -> FastAPI:
     application.include_router(agent_router, prefix=settings.api_v1_prefix)
     application.include_router(documents_router, prefix=settings.api_v1_prefix)
     application.include_router(rag_router, prefix=settings.api_v1_prefix)
+    application.include_router(runtime_router, prefix=settings.api_v1_prefix)
     application.include_router(tools_router, prefix=settings.api_v1_prefix)
     application.include_router(watchdog_router, prefix=settings.api_v1_prefix)
     application.include_router(harness_router, prefix=settings.api_v1_prefix)

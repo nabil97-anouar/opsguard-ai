@@ -411,8 +411,8 @@ def build_agent_runs() -> list[DemoRecord]:
             payload={
                 "alert_id": demo_uuid("alert:suspicious-gpu-usage"),
                 "status": "completed",
-                "llm_provider": "mock",
-                "model_version": "demo-trace-v1",
+                "llm_provider": "deterministic",
+                "model_version": "fixture-history-v1",
                 "total_steps": len(STEP_NAMES),
                 "total_tool_calls": 5,
                 "total_tokens_used": 4280,
@@ -431,8 +431,8 @@ def build_agent_runs() -> list[DemoRecord]:
             payload={
                 "alert_id": demo_uuid("alert:rag-prompt-injection"),
                 "status": "awaiting_approval",
-                "llm_provider": "mock",
-                "model_version": "demo-trace-v1",
+                "llm_provider": "deterministic",
+                "model_version": "fixture-history-v1",
                 "total_steps": len(STEP_NAMES),
                 "total_tool_calls": 2,
                 "total_tokens_used": 3012,

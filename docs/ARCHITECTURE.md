@@ -1,6 +1,6 @@
 # Architecture
 
-OpsGuard combines incident investigation, local document retrieval, typed tool execution, policy checks, and evaluation reporting in one application. The current reasoning and infrastructure responses are deterministic; SQL persistence, retrieval, workflow execution, and report generation are implemented services.
+OpsGuard combines incident investigation, local document retrieval, typed tool execution, policy checks, and evaluation reporting in one application. Reasoning is provided through a typed deterministic/OpenAI boundary; infrastructure responses remain deterministic local fixtures.
 
 ## Components and data flow
 
@@ -10,7 +10,9 @@ flowchart TD
     API --> Runner[Sequential agent runner]
     API --> Ingest[Document ingestion and chunk scanning]
     Ingest --> SQL[(PostgreSQL or SQLite)]
-    Runner --> Rules[Deterministic reasoning rules]
+    Runner --> Provider[LLM provider interface]
+    Provider --> Rules[Deterministic provider]
+    Provider --> OpenAI[Optional OpenAI provider]
     Runner --> RAG[Lexical retrieval]
     RAG --> SQL
     Runner --> Tools[Typed tool registry]
@@ -32,14 +34,14 @@ flowchart TD
     Snapshot --> Reports[Markdown and JSON reports]
 ```
 
-The diagram shows active application components. Qdrant and external provider integrations are absent from the runtime and Compose stack.
+The provider proposes classification, hypotheses, assessment, recommendations, and typed actions. Evidence validation, tool planning/authorization, watchdog policy, persistence identity, and human review remain application-owned. Qdrant is absent from the runtime and Compose stack.
 
 | Component | Implementation |
 | --- | --- |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind; [dashboard-shell.tsx](../frontend/components/dashboard/dashboard-shell.tsx) coordinates requests and React state |
 | API | FastAPI routers and Pydantic request/response schemas registered in [main.py](../backend/app/main.py) |
 | Agent | Fixed ten-node workflow in [runner.py](../backend/app/agent/runner.py) and [nodes.py](../backend/app/agent/nodes.py) |
-| Reasoning | Keyword classification, hypothesis/recommendation templates, and confidence arithmetic in [mock_llm.py](../backend/app/agent/mock_llm.py) |
+| Reasoning | Typed interface, context builder, deterministic rules, and optional OpenAI Responses adapter in [providers](../backend/app/agent/providers) |
 | Retrieval | SQL document ingestion, character chunking, and lexical ranking in [app/rag](../backend/app/rag) |
 | Tools | Immutable typed registry, local handlers, and run-linked audit records in [app/tools](../backend/app/tools) |
 | Watchdog | Eight deterministic policies and decision aggregation in [app/watchdog](../backend/app/watchdog) |
@@ -52,10 +54,10 @@ The diagram shows active application components. Qdrant and external provider in
 1. Fixture seeding creates alerts and reference data. `POST /api/v1/agent/runs` starts an investigation for an existing alert ID.
 2. The runner records the alert, classifies it, retrieves document excerpts, and selects tools from a fixed incident-category plan.
 3. Local tools return infrastructure fixtures, search stored incidents/runbooks, or persist a ticket draft. Destructive tool definitions return blocked results.
-4. The reasoning rules assemble hypotheses, an assessment, and a candidate recommendation with structured proposed actions.
+4. The configured provider assembles typed hypotheses, an assessment, and a candidate recommendation. The application rejects malformed output and unknown/cross-run evidence references.
 5. The watchdog evaluates the candidate, persists its typed verdict, and marks it pending review or blocked before creating a correspondingly labeled local ticket. The runner ends in `waiting_for_human` with approval `pending`.
 
-This work occurs synchronously in the API request. Steps, assessments, calls, and findings are committed incrementally. There is no task queue, adaptive agent loop, external reasoning provider, or approval-resume implementation. See [Agent Workflow](AGENT_GRAPH.md) for the exact node sequence and error behavior.
+This work occurs synchronously in the API request. OpenAI mode makes four bounded provider calls during a run; deterministic mode makes none. Steps, assessments, calls, and findings are committed incrementally. There is no task queue, adaptive agent loop, direct model tool calling, or approval-resume implementation. See [Agent Workflow](AGENT_GRAPH.md) for the exact node sequence and error behavior.
 
 ## Frontend/backend contract
 

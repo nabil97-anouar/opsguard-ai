@@ -7,7 +7,7 @@ export type HealthPayload = {
   version: string;
   environment: string;
   check: "liveness";
-  reasoner: "deterministic-mock-v2";
+  reasoner: "deterministic" | "openai" | string;
   timestamp: string;
 };
 
@@ -215,6 +215,13 @@ export type AgentRunResponse = {
   steps: AgentStep[];
   self_assessment: AgentAssessment | null;
   final_recommendation: FinalRecommendation | null;
+  llm_provider: string;
+  model_version: string | null;
+  reasoning_mode: string;
+  reasoning_schema_version: string | null;
+  provider_request_ids: string[];
+  provider_duration_ms: number;
+  total_tokens_used: number | null;
 };
 
 export type AgentRunDetailResponse = {
@@ -227,6 +234,11 @@ export type AgentRunDetailResponse = {
   policy_version: string | null;
   llm_provider: string;
   model_version: string | null;
+  reasoning_mode: string;
+  reasoning_schema_version: string | null;
+  provider_request_ids: string[];
+  provider_duration_ms: number;
+  total_tokens_used: number | null;
   risk_level: string;
   approval_status: string;
   started_at: string;
@@ -367,6 +379,10 @@ export type EvaluationCohort = {
   expected_case_count: number;
   completed_case_count: number;
   provider_version: string | null;
+  provider: string | null;
+  model: string | null;
+  reasoning_mode: string | null;
+  reasoning_schema_version: string | null;
   policy_version: string | null;
 };
 
@@ -438,4 +454,15 @@ export type ToolAttempt = {
   error_code: string | null;
   user_error: string | null;
   diagnostic: Record<string, unknown>;
+};
+
+export type ReasoningRuntime = {
+  provider: "deterministic" | "openai";
+  model: string;
+  mode: "local" | "external";
+  implementation_version: string;
+  schema_version: string;
+  configured: boolean;
+  available: boolean;
+  reason: string | null;
 };

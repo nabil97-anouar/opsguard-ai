@@ -30,7 +30,13 @@ services:
 
   backend:
     build: ./backend
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      LLM_PROVIDER: ${LLM_PROVIDER:-deterministic}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-1800}
     depends_on:
       init:
         condition: service_completed_successfully

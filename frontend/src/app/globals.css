@@ -13,9 +13,9 @@ html {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 32%),
-    radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.12), transparent 24%),
-    linear-gradient(180deg, #06090f 0%, #090d14 48%, #05070b 100%);
+    radial-gradient(circle at 18% -10%, rgba(0, 255, 102, 0.13), transparent 30%),
+    radial-gradient(circle at 86% 8%, rgba(25, 201, 107, 0.08), transparent 24%),
+    linear-gradient(180deg, #020403 0%, #050806 48%, #020403 100%);
   color: #f8fafc;
 }
 
@@ -25,9 +25,9 @@ body::before {
   inset: 0;
   z-index: -1;
   background-image:
-    linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
-  background-size: 72px 72px;
+    linear-gradient(to right, rgba(0, 255, 102, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 255, 102, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
   mask-image: linear-gradient(180deg, rgba(255, 255, 255, 0.65), transparent 90%);
   pointer-events: none;
 }
@@ -37,6 +37,80 @@ body::before {
 }
 
 ::selection {
-  background: rgba(96, 165, 250, 0.4);
-  color: #eff6ff;
+  background: rgba(0, 255, 102, 0.32);
+  color: #f0fff5;
+}
+
+@layer components {
+  .matrix-panel {
+    @apply border-accent/20 bg-panel/90 shadow-glow;
+    background-image: linear-gradient(135deg, rgba(0, 255, 102, 0.045), transparent 32%);
+  }
+
+  .console-kicker {
+    @apply inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.24em] text-accentSoft;
+  }
+
+  .status-dot {
+    @apply h-2 w-2 rounded-full bg-accent shadow-[0_0_12px_rgba(0,255,102,0.9)];
+  }
+
+  .telemetry-row {
+    @apply rounded-2xl border border-accent/15 bg-black/30 p-5 transition duration-200 hover:border-accent/35 focus-within:border-accent/50;
+  }
+
+  .telemetry-label {
+    @apply font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500;
+  }
+
+  .matrix-icon {
+    border-radius: 4px 14px 4px 14px;
+    box-shadow: inset 0 0 18px rgba(0, 255, 102, 0.08), 0 0 18px rgba(0, 255, 102, 0.08);
+  }
+}
+
+.matrix-rain {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  width: 100%;
+  height: min(760px, 80vh);
+  opacity: 0.42;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.72) 42%, transparent 100%);
+}
+
+.trace-line {
+  position: relative;
+}
+
+.trace-line::before {
+  content: "";
+  position: absolute;
+  left: 1.34rem;
+  top: 1rem;
+  bottom: 1rem;
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(0, 255, 102, 0.65), rgba(0, 255, 102, 0.05));
+  box-shadow: 0 0 12px rgba(0, 255, 102, 0.25);
+}
+
+.trace-node {
+  position: relative;
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.trace-node:hover {
+  border-color: rgba(0, 255, 102, 0.35);
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .matrix-rain { display: none; }
 }

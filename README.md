@@ -6,7 +6,7 @@ OpsGuard AI coordinates evidence retrieval, typed operational tools, safety-poli
 
 Incident triage requires assembling observations from alerts, logs, runbooks, and previous incidents while distinguishing facts from assumptions. OpsGuard records that investigation as a sequence of steps, with retrieved source references, tool results, uncertainty, and policy findings available for review.
 
-A FastAPI service runs the investigation through a closed tool registry and a fixed reasoning workflow. A Next.js dashboard presents the recorded activity. Deterministic security scenarios exercise individual controls and the agent workflow, and evaluation endpoints export the resulting indicators.
+A FastAPI service runs the investigation through a closed tool registry and a fixed reasoning workflow. Reasoning is provided by the credential-free deterministic provider by default, with an optional OpenAI provider using validated structured outputs. A Next.js cyber-operations dashboard presents the recorded activity. Deterministic security scenarios exercise individual controls and the agent workflow, and evaluation endpoints export the resulting indicators.
 
 ## Key Capabilities
 
@@ -16,6 +16,7 @@ A FastAPI service runs the investigation through a closed tool registry and a fi
 - Persisted investigation steps, every tool invocation attempt (including denials), assessments, and typed watchdog findings.
 - Nine security regression scenarios covering retrieved content, tool output, unsafe actions, and review requirements.
 - Dashboard inspection and stored Markdown/JSON reports with explicit execution cohorts, versions, provenance, and metric denominators.
+- Typed reasoning-provider contracts with run-scoped evidence validation and backend-only OpenAI credentials.
 
 ## Architecture
 
@@ -23,7 +24,9 @@ A FastAPI service runs the investigation through a closed tool registry and a fi
 flowchart TD
     Dashboard[Next.js dashboard] --> API[FastAPI]
     API --> Workflow[Fixed investigation workflow]
-    Workflow --> Reasoning[Deterministic local reasoning]
+    Workflow --> Provider[LLM provider interface]
+    Provider --> Deterministic[Deterministic provider]
+    Provider --> OpenAI[Optional OpenAI provider]
     Workflow --> Retrieval[Lexical retrieval]
     Workflow --> Tools[Typed local tool registry]
     Tools --> Observations[Simulated infrastructure observations]
@@ -44,6 +47,13 @@ flowchart TD
 ```
 
 The backend uses FastAPI, SQLModel, and Pydantic; the frontend uses Next.js, React, TypeScript, and Tailwind CSS. See the [architecture reference](docs/ARCHITECTURE.md), [agent execution flow](docs/AGENT_GRAPH.md), and [data model](docs/DATA_MODEL.md).
+
+## Reasoning Modes
+
+- **Deterministic provider:** reproducible local development, CI, security-harness execution, and offline evaluation. It requires no API key.
+- **OpenAI provider:** optional external reasoning through the Responses API and Pydantic-validated structured outputs. Provider output remains untrusted and cannot authorize tools, change evidence trust, alter watchdog rules, or bypass human review.
+
+Provider selection is backend configuration. The browser never accepts or receives an API key. See [Setup](docs/SETUP.md) for the opt-in configuration and manual bounded check.
 
 ## Safety Model
 
@@ -104,9 +114,9 @@ Report vulnerabilities using [SECURITY.md](SECURITY.md). A repository license ha
 
 ## Security and Limitations
 
-OpsGuard currently uses deterministic local reasoning for reproducible development and security regression testing. Infrastructure adapters return deterministic local observations and do not execute live Slurm, Docker, network, or system operations. The registry is an internal Python API, not an MCP server.
+OpsGuard defaults to deterministic local reasoning for reproducible development and security regression testing. Optional OpenAI reasoning sends the bounded alert/evidence context to an external service; its output is structurally validated and remains subordinate to application controls. Infrastructure adapters return deterministic local observations and do not execute live Slurm, Docker, network, or system operations. The registry is an internal Python API, not an MCP server.
 
-Human review is currently a terminal workflow state; authenticated approval and post-approval execution are not implemented. The API has no authentication and is intended for local use. Compose binds published ports to loopback and runs no unused Qdrant service; external model providers are not implemented.
+Human review is currently a terminal workflow state; authenticated approval and post-approval execution are not implemented. The API has no authentication and is intended for local use. Compose binds published ports to loopback and runs no unused Qdrant service.
 
 Trust labels do not authenticate sources, and valid evidence references do not establish semantic support for a claim. Audit persistence requires a working database; crashes may leave incomplete invocation checkpoints. Audit rows are not tamper-evident, and fixture resets require care. Pattern screening is limited, and assessment values are uncalibrated. Consult the [security boundaries](docs/SECURITY_BOUNDARIES.md), [retrieval reference](docs/RAG_DESIGN.md), and [evaluation limitations](docs/EVALUATION.md) before extending the system.
 
@@ -115,5 +125,5 @@ Trust labels do not authenticate sources, and valid evidence references do not e
 - Reviewed trust promotion, source authentication, and claim-level support checks.
 - Broader independently labeled evaluation cases and isolated benchmark environments.
 - Recovery of interrupted executions and broader database migration support.
-- An injected reasoning-provider interface that preserves deterministic testing.
+- Broader provider-output conformance cases and explicitly enabled external-provider evaluations.
 - Authenticated review workflows and bounded external integrations.

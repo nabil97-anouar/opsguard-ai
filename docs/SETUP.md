@@ -44,14 +44,21 @@ The walkthrough uses seeded IDs, executes two investigations, runs the harness w
 | `DATABASE_URL` | SQLAlchemy `sqlite` or `postgresql+psycopg` URL; default local PostgreSQL. SQLite paths are relative to the process working directory. |
 | `ENVIRONMENT` | `development` (default), `staging`, or `production`. Direct seed/create-table endpoints are disabled in production; this is not an authentication boundary. |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
+| `LLM_PROVIDER` | `deterministic` (default) or `openai`. Selection remains backend-only. |
+| `OPENAI_API_KEY` | Required only when `LLM_PROVIDER=openai`; stored as a secret setting and never returned by the runtime endpoint. |
+| `OPENAI_MODEL` | Required only for OpenAI mode. Choose a model available to the configured OpenAI project that supports structured outputs. |
+| `LLM_TIMEOUT_SECONDS` | Per provider call timeout, 1–120 seconds; default 30. |
+| `LLM_MAX_OUTPUT_TOKENS` | Per provider call output bound, 256–8000; default 1800. |
 | `BACKEND_CORS_ORIGINS` | JSON array or comma-separated explicit HTTP(S) origins. Empty disables cross-origin access. Wildcards, credentials and paths are rejected. |
 | `API_V1_PREFIX` | Defaults to `/api/v1`; must start with `/` without trailing slash, query or fragment. |
 | `NEXT_PUBLIC_API_BASE_URL` | Frontend **build-time** browser URL; defaults to `http://localhost:8000/api/v1`. May be a same-origin path when a proxy is provided externally. This repository does not provide a proxy. |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Compose-only development database settings; native clients must set a matching `DATABASE_URL`. |
 
-Removed provider/API-key, mock-toggle, Qdrant and unused secret settings have no effect. The only implemented reasoner is deterministic; `/health` identifies it explicitly. Unrecognized dotenv fields are ignored so Compose/frontend values can share the example file. No real integrations or auth are enabled by environment variables.
+Deterministic mode works immediately and is used by the security harness. To opt into OpenAI reasoning, set `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL` in the backend environment, then restart the backend. Invalid provider names fail settings validation; selecting OpenAI without its key/model fails explicitly when a run starts. `GET /api/v1/runtime/reasoning` exposes provider/model/configuration state without credentials. The optional `python scripts/verify_openai_provider.py` command performs one bounded structured-output call and is never run by CI.
 
-Next.js reads its process environment or `frontend/.env.local`; it does not load root `.env` in native mode. The browser API URL is public and embedded during build. Changing a running frontend container's environment cannot change it: pass a build argument and rebuild. Never place credentials in `NEXT_PUBLIC_*`. Google font compilation currently requires network access.
+The provider sends alert data, evidence snapshots, trust metadata, successful observations, gaps, and the allowed action vocabulary to OpenAI. Treat those records as data transmitted to an external processor. Prompts and evidence content are not stored as provider provenance. Run records retain provider/model/schema/version, timing, optional token usage, and safe response IDs.
+
+Next.js reads its process environment or `frontend/.env.local`; it does not load root `.env` in native mode. The browser API URL is public and embedded during build. Changing a running frontend container's environment cannot change it: pass a build argument and rebuild. Never place credentials in `NEXT_PUBLIC_*`. The interface uses system font stacks and requires no runtime font download.
 
 ## Compose
 

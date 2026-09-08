@@ -18,7 +18,8 @@ All paths below are relative to `/api/v1`.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/health` | Liveness only: version, environment, deterministic reasoner, timestamp; no dependency checks |
+| GET | `/health` | Liveness only: version, environment, configured reasoner name, timestamp; no dependency checks |
+| GET | `/runtime/reasoning` | Safe provider/model/mode/version/schema and configuration/availability state; never credentials |
 | GET | `/ready` | SQL connection plus required tables/columns; 200 ready or 503 unavailable/schema missing; no DDL |
 | GET | `/db/health` | Database connectivity and latency |
 | POST | `/db/create-tables` | Create missing SQL tables; explicit endpoint disabled when `ENVIRONMENT=production` |
@@ -125,7 +126,7 @@ Unknown tools return 404 and malformed/invalid inputs return 422 with structured
 
 This ID identifies the seeded GPU alert. The response includes `agent_run_id`, `alert_id`, `steps`, `self_assessment`, and `final_recommendation`, with status `waiting_for_human` or `failed`.
 
-Retrieve `/agent/runs/{agent_run_id}` for persisted tool calls and authoritative `tool_attempts`, error details, provider metadata, and approval status. The final recommendation adds typed `proposed_actions`, `lifecycle_state`, `review_valid`, `policy_version` and `watchdog_decision`. A pending approval is a terminal review state; there is no API to resume execution.
+Retrieve `/agent/runs/{agent_run_id}` for persisted tool calls and authoritative `tool_attempts`, error details, provider/model/mode/implementation/schema provenance, safe provider response IDs, provider duration, optional token usage, and approval status. The final recommendation adds typed `proposed_actions`, `lifecycle_state`, `review_valid`, `policy_version` and `watchdog_decision`. A pending approval is a terminal review state; there is no API to resume execution.
 
 ### Evaluate a recommendation
 

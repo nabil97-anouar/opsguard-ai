@@ -13,12 +13,10 @@ type RagContextPanelProps = {
 
 export function RagContextPanel({ chunks, isLoading, hasRecordedRun }: RagContextPanelProps) {
   return (
-    <Card className="border-white/8 bg-white/[0.03]">
+    <Card className="matrix-panel">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-            RAG citations
-          </p>
+          <p className="console-kicker">EVIDENCE // RUN-SCOPED</p>
           <CardTitle className="mt-3">Retrieved context with provenance</CardTitle>
           <CardDescription className="mt-3">
             These snapshots show what this run retrieved, including its recorded trust

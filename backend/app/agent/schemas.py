@@ -26,6 +26,13 @@ class AgentRunResult(BaseModel):
     execution_kind: str = "unknown"
     provider_version: str | None = None
     policy_version: str | None = None
+    llm_provider: str = "legacy_unknown"
+    model_version: str | None = None
+    reasoning_mode: str = "legacy_unknown"
+    reasoning_schema_version: str | None = None
+    provider_request_ids: list[str] = Field(default_factory=list)
+    provider_duration_ms: int = 0
+    total_tokens_used: int | None = None
     agent_run_id: UUID
     alert_id: UUID
     status: str
