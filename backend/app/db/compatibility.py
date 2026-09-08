@@ -1,4 +1,4 @@
-"""Small, additive upgrade for databases created before evaluation-v2.
+"""Small, additive upgrades for evaluation-v2 and watchdog/tool audit v3.
 
 Unknown historical rows deliberately remain legacy_unknown: is_demo identifies the
 input's origin, not whether an agent actually ran. Only known seeded UUIDs are
@@ -11,6 +11,16 @@ from sqlmodel import Session, select
 
 def upgrade_evaluation_integrity(engine: Engine) -> None:
     additions = {
+        "tool_calls": {
+            "handler_invoked": "BOOLEAN",
+            "outcome": "VARCHAR(30) NOT NULL DEFAULT 'legacy_unknown'",
+            "origin": "VARCHAR(100) NOT NULL DEFAULT 'legacy_unknown'",
+        },
+        "ticket_drafts": {
+            "lifecycle_state": "VARCHAR(40) NOT NULL DEFAULT 'legacy_unknown'",
+            "policy_validation": "VARCHAR(40) NOT NULL DEFAULT 'not_evaluated'",
+            "policy_version": "VARCHAR",
+        },
         "agent_runs": {
             "provenance": "VARCHAR(30) NOT NULL DEFAULT 'legacy_unknown'",
             "execution_kind": "VARCHAR(30) NOT NULL DEFAULT 'unknown'",

@@ -8,17 +8,11 @@ from app.schemas.common import SchemaModel
 from app.watchdog.schemas import WatchdogDecision, WatchdogFinding
 
 
-class WatchdogEvaluateRequest(SchemaModel):
-    alert: dict[str, Any] = Field(default_factory=dict)
-    retrieved_context: list[dict[str, Any]] = Field(default_factory=list)
-    tool_results: list[dict[str, Any]] = Field(default_factory=list)
-    hypotheses: list[dict[str, Any]] = Field(default_factory=list)
-    evidence_items: list[dict[str, Any]] = Field(default_factory=list)
-    planned_tools: list[dict[str, Any]] = Field(default_factory=list)
-    blocked_tools: list[dict[str, Any]] = Field(default_factory=list)
-    self_assessment: dict[str, Any] | None = None
-    final_recommendation: dict[str, Any] | None = None
+from app.watchdog.schemas import WatchdogInput
 
+
+class WatchdogEvaluateRequest(WatchdogInput):
+    pass
 
 class WatchdogPolicyItem(SchemaModel):
     policy_id: str

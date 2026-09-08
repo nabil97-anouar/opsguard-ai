@@ -22,6 +22,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { RagContextPanel } from "@/components/dashboard/rag-context-panel";
 import { SafetyBadge } from "@/components/dashboard/safety-badge";
 import { SystemStatusCard } from "@/components/dashboard/system-status-card";
+import { ToolAttemptsPanel } from "@/components/dashboard/tool-attempts-panel";
 import { ToolCallsPanel } from "@/components/dashboard/tool-calls-panel";
 import { ToolRegistryGroups } from "@/components/dashboard/tool-registry-groups";
 import { WatchdogFindingsPanel } from "@/components/dashboard/watchdog-findings-panel";
@@ -29,6 +30,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   getAgentRunDetail,
+  listToolAttempts,
   getBackendHealth,
   getEvaluationSummary,
   getErrorMessage,
@@ -141,6 +143,7 @@ export function DashboardShell() {
   const [tools, setTools] = useState<ToolListItem[]>([]);
   const [policies, setPolicies] = useState<WatchdogPolicyItem[]>([]);
   const [harnessScenarios, setHarnessScenarios] = useState<HarnessScenarioResponse[]>([]);
+  const [recentAttempts, setRecentAttempts] = useState<import("@/lib/types").ToolAttempt[]>([]);
   const [agentRun, setAgentRun] = useState<AgentRunDetailResponse | null>(null);
   const [ragChunks, setRagChunks] = useState<RetrievalChunk[]>([]);
   const [harnessRun, setHarnessRun] = useState<HarnessRunResponse | null>(null);
@@ -180,9 +183,12 @@ export function DashboardShell() {
       listTools(),
       listWatchdogPolicies(),
       listHarnessScenarios(),
+      listToolAttempts(),
     ]);
 
-    const [healthResult, documentsResult, toolsResult, policiesResult, scenariosResult] = results;
+    const [healthResult, documentsResult, toolsResult, policiesResult, scenariosResult, attemptsResult] = results;
+    if (attemptsResult.status === "fulfilled") setRecentAttempts(attemptsResult.value.items);
+    else issues.push(getErrorMessage(attemptsResult.reason));
 
     if (healthResult.status === "fulfilled") {
       setHealth(healthResult.value);
@@ -681,6 +687,7 @@ export function DashboardShell() {
           hasRecordedRun={agentRun !== null}
           isLoading={isBootstrapping || runningScenario !== null}
         />
+        <ToolAttemptsPanel attempts={recentAttempts} />
         <ToolCallsPanel
           isLoading={isBootstrapping || runningScenario !== null}
           toolCalls={agentRun?.tool_calls ?? []}

@@ -34,7 +34,7 @@ function summarizeToolOutput(toolCall: ToolCall): string {
     return `${record.results.length} runbook results returned.`;
   }
   if (record.ticket_draft_id) {
-    return `Ticket draft ${String(record.ticket_draft_id)} created for human review.`;
+    return `Ticket draft ${String(record.ticket_draft_id)} recorded; inspect its policy lifecycle.`;
   }
   if (record.node) {
     return `Node ${String(record.node)} telemetry returned.`;
@@ -112,7 +112,8 @@ export function ToolCallsPanel({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <SafetyBadge value={toolCall.status} />
+                <SafetyBadge value={toolCall.outcome ?? toolCall.status} />
+                <span className="text-xs text-slate-300">Handler invoked: {toolCall.handler_invoked === true ? "yes" : toolCall.handler_invoked === false ? "no" : "unknown (historical)"}</span>
                 <SafetyBadge value={toolCall.trust_level} />
                 <SafetyBadge value={toolCall.injection_scan_result} />
               </div>

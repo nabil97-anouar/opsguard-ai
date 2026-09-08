@@ -15,6 +15,9 @@ class ToolCallBase(SchemaModel):
     agent_run_id: UUID
     step_id: UUID
     tool_name: str
+    handler_invoked: bool | None = None
+    outcome: str = "legacy_unknown"
+    origin: str = "legacy_unknown"
     input_args: dict[str, Any] = Field(default_factory=dict)
     output: Any | None = None
     trust_level: str
@@ -53,8 +56,10 @@ class ToolExecuteRequest(SchemaModel):
 
 class ToolExecuteResponse(SchemaModel):
     status: Literal["executed", "blocked", "failed"]
-    outcome: Literal["succeeded", "blocked", "failed"]
+    outcome: Literal["succeeded", "denied", "failed"]
     tool_call_id: UUID | None = None
+    handler_invoked: bool = False
+    error_code: str | None = None
     tool_name: str
     trust_level: TrustLevel
     requires_human_approval: bool = False

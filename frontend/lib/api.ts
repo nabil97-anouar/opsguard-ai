@@ -174,3 +174,8 @@ export async function runEvaluation(
     }
   });
 }
+
+
+export function listToolAttempts(): Promise<{ items: import("./types").ToolAttempt[] }> {
+  return request("/tools/attempts");
+}

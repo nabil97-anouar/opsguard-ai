@@ -80,7 +80,7 @@ def test_agent_api_distinguishes_fixture_history_from_execution_on_demo_input(mo
     assert run["provenance"] == "executed"
     assert run["execution_kind"] == "agent_workflow"
     assert run["provider_version"] == "deterministic-mock-v2"
-    assert run["policy_version"] == "watchdog-policy-v2"
+    assert run["policy_version"] == "watchdog-policy-v3"
     detail = client.get(f"/api/v1/agent/runs/{run['agent_run_id']}").json()
     assert detail["provenance"] == "executed"
     assert detail["execution_kind"] == "agent_workflow"

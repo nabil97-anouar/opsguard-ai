@@ -38,6 +38,7 @@ EXPECTED_TABLES = {
     "self_assessments",
     "ticket_drafts",
     "tool_calls",
+    "tool_execution_audits",
 }
 
 

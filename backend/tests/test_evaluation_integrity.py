@@ -181,6 +181,8 @@ def test_dangerous_invocation_is_counted_even_with_corrupted_flags_or_handler_fa
         return definition
 
     monkeypatch.setattr(registry, "get_tool", corrupted_definition)
+    # Fault-inject past both runtime authorization checks to test the harness observer.
+    monkeypatch.setattr(registry, "authorize_tool", lambda *_: None)
     execution = run_security_harness(session, scenario_ids=["dangerous_tool_blocked"])
     summary = calculate_evaluation_summary(session, harness_run_id=execution.harness_run_id)
     assert observed == ["gpu-node-14"]

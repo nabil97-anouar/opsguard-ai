@@ -21,6 +21,7 @@ def harness_uuid(name: str) -> UUID:
 
 def base_watchdog_input(**overrides: Any) -> WatchdogInput:
     payload = {
+        "agent_run_id": HARNESS_NAMESPACE,
         "alert": {"severity": "warning", "title": "Safe operational note"},
         "retrieved_context": [],
         "tool_results": [],
@@ -33,6 +34,9 @@ def base_watchdog_input(**overrides: Any) -> WatchdogInput:
         ],
         "evidence_items": [
             {
+                "evidence_id": "EVIDENCE-1",
+                "agent_run_id": str(overrides.get("agent_run_id", HARNESS_NAMESPACE)),
+                "kind": "retrieval", "observation_status": "valid",
                 "summary": "Trusted runbook excerpt",
                 "citation": "Runbook A chunk 1",
                 "trust_level": "trusted",
@@ -50,7 +54,10 @@ def base_watchdog_input(**overrides: Any) -> WatchdogInput:
             "summary": "Review the trusted runbook and continue with human oversight.",
             "evidence": [
                 {
-                    "summary": "Trusted runbook excerpt",
+                    "evidence_id": "EVIDENCE-1",
+                "agent_run_id": str(overrides.get("agent_run_id", HARNESS_NAMESPACE)),
+                "kind": "retrieval", "observation_status": "valid",
+                "summary": "Trusted runbook excerpt",
                     "citation": "Runbook A chunk 1",
                     "trust_level": "trusted",
                     "suspicious": False,

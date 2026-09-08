@@ -30,8 +30,8 @@ The node names above are the names stored in traces. This is a sequential Python
 | `execute_safe_tools` | Record typed outcomes and audit IDs; only successful observations with persisted identities become evidence. Failed or blocked attempts create evidence gaps. |
 | `synthesize_hypotheses` | Select scenario-specific hypothesis templates and validate supporting IDs against this run's evidence. |
 | `metacognitive_self_assessment` | Calculate a heuristic confidence estimate, uncertainty, capability label, and missing-evidence notes. |
-| `generate_recommendation` | Assemble the recommendation and create a local ticket draft for recognized categories. |
-| `watchdog_policy_check` | Evaluate seven policies, persist findings, and annotate the recommendation. |
+| `generate_recommendation` | Assemble typed proposals and persist an unvalidated candidate; no ticket yet. |
+| `watchdog_policy_check` | Evaluate eight policies, persist a typed decision, mark the recommendation pending review or blocked, then create the labeled local ticket for recognized categories. |
 | `wait_for_human_approval` | End with run status `waiting_for_human` and approval status `pending`. |
 
 Node implementations are in [nodes.py](../backend/app/agent/nodes.py); tool selection is in [planner.py](../backend/app/agent/planner.py).
@@ -50,11 +50,11 @@ Confidence is an arithmetic function of classification, evidence count, suspicio
 
 Hypotheses use evidence IDs, and recommendation citations identify exact run/chunk or tool-call observations. Generated recommendations must retain all recorded evidence without truncation. Validation rejects references outside the run. This verifies identity and retention, not whether a hypothesis follows logically from its sources.
 
-Agent tool outcomes are `succeeded`, `failed`, and `blocked`. The execution API adds an `outcome` field while retaining legacy `status: executed` for successful calls and existing audit compatibility. Failed and blocked attempts stay in `tool_results` and the audit trail; they do not appear in supporting evidence or the successful `executed_tools` list.
+Internal agent observation outcomes retain `succeeded`, `failed`, and `blocked`. The execution API and authoritative audit use `succeeded`, `failed`, and `denied`; `handler_invoked` independently records handler entry. Legacy `status` values remain for observation compatibility. Failed and blocked attempts stay in `tool_results` and the audit trail; they do not appear in supporting evidence or the successful `executed_tools` list.
 
 ## Persistence and errors
 
-The shared `_run_node` helper records input/output snapshots, step status, duration, and error text in `AgentStep`. The workflow also writes `SelfAssessment`, `ToolCall`, `SafetyEvent`, and optional `TicketDraft` rows.
+The shared `_run_node` helper records input/output snapshots, step status, duration, and error text in `AgentStep`. The workflow also writes `SelfAssessment`, `ToolCall`, `SafetyEvent`, and optional `TicketDraft` rows. The tool dispatcher owns `ToolExecutionAudit` and its separate transaction boundary. The orchestration layer commits run/step identities before dispatch; handlers only add/flush local effects. Requested/invoked checkpoints persist independently, effects commit with success, and failures roll back effects before recording failure. Caller rollback leaves required tool audit records intact.
 
 A successful investigation returns `waiting_for_human`. The runner attempts to mark exceptions as `failed`; earlier committed steps can remain available. Run details reconstruct the recommendation from step snapshots and the assessment from stored records. Inspect run status and failed steps before using a partially generated recommendation.
 
@@ -62,6 +62,8 @@ A successful investigation returns `waiting_for_human`. The runner attempts to m
 
 The [Tool Registry](TOOL_REGISTRY.md) exposes local data adapters and permanently blocked destructive definitions. The watchdog adds policy findings after recommendation generation. Every successful run stops for human review; there is no implemented approve/reject endpoint, authenticated reviewer workflow, or infrastructure execution after approval.
 
-Ticket drafts are currently stored before the watchdog runs. Their text is not rewritten with the later watchdog decision, so review the final run recommendation and findings alongside the draft.
+The candidate snapshot contains typed [actions](../backend/app/agent/actions.py): type, target, parameters, risk, approval requirement, evidence IDs and rationale. It always starts with `lifecycle_state: candidate`, `review_valid: false`, no ticket and no policy decision, regardless of provider-supplied labels. After evaluation the watchdog step persists the exact decision and transitions to `pending_human_review` or `blocked`; only then is its ticket created with matching lifecycle and policy-version metadata. Blocked artifacts are retained but never marked review-valid. A standalone ticket request remains a candidate without completed policy review.
+
+Evidence, tool observations, hypotheses, proposals and recommendation prose occupy separate state fields. Action checks inspect typed proposals first and screen intent-bearing prose as fallback. Reference integrity requires same-run valid observations; failed/blocked tool calls and quarantined sources cannot support claims. This does not establish semantic support. Watchdog output includes exact verdict, finding IDs/types, severity, affected actions, blocking/review flags, reason and policy version. All successful workflows still terminate at human review even when the policy verdict is `allow`.
 
 Evidence and policy checks remain deterministic engineering controls. Hypotheses use templates, claim-level semantic support is not verified, and injection screening covers configured patterns. Historical snapshots preserve the recorded trust and content even after a source changes; they are ordinary SQL records, not tamper-evident storage. Older records without complete provenance are not backfilled. These limits are described in [Retrieval and Evidence](RAG_DESIGN.md) and [Security Boundaries](SECURITY_BOUNDARIES.md).

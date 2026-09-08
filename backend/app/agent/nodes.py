@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from sqlmodel import Session
 
+from app.agent.actions import ProposedAction, RecommendationState
 from app.agent.mock_llm import assess_confidence, classify_alert, generate_final_recommendation, generate_hypotheses
 from app.agent.planner import plan_tools_for_state
 from app.agent.schemas import StepExecutionSummary
@@ -184,6 +185,7 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
         )
         state.evidence_items.append(
             EvidenceItem(
+                agent_run_id=state.agent_run_id,
                 evidence_id=f"{state.agent_run_id}:alert:{alert.id}",
                 kind="alert",
                 source_type="alert",
@@ -284,6 +286,7 @@ def retrieve_context(session: Session, agent_run: AgentRun, state: AgentState) -
         for item in state.retrieved_context:
             state.evidence_items.append(
                 EvidenceItem(
+                    agent_run_id=state.agent_run_id,
                     evidence_id=item.evidence_id,
                     kind="retrieval",
                     source_type="document",
@@ -414,7 +417,7 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
             tool_result = ToolResultItem(
                 tool_name=result.tool_name,
                 tool_call_id=result.tool_call_id,
-                status=result.outcome,
+                status="blocked" if result.outcome == "denied" else result.outcome,
                 observed_at=_ensure_aware(result.created_at),
                 trust_level=trust_level,
                 requires_human_approval=result.requires_human_approval,
@@ -488,7 +491,9 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
 
             state.evidence_items.append(
                 EvidenceItem(
+                    agent_run_id=state.agent_run_id,
                     evidence_id=evidence_id,
+                    observation_status="succeeded",
                     kind="tool_output",
                     source_type="tool",
                     tool_call_id=result.tool_call_id,
@@ -617,36 +622,24 @@ def generate_recommendation(session: Session, agent_run: AgentRun, state: AgentS
             raise ValueError("Recommendation cites evidence outside this run.")
         state.final_recommendation = recommendation
 
-        alert_type = str(state.alert_classification.get("alert_type") or "unknown")
-        if alert_type != "unknown":
-            ticket_title = f"OpsGuard AI draft: {state.alert_summary.title if state.alert_summary else alert_type}"
-            ticket_body = "\n".join(
-                [
-                    state.final_recommendation.summary,
-                    "",
-                    "Recommended next steps:",
-                    *[f"- {item}" for item in state.final_recommendation.recommended_next_steps],
-                    "",
-                    "Uncertainty:",
-                    state.final_recommendation.uncertainty,
-                ]
-            )
-            ticket_result = execute_tool(
-                "create_ticket_draft",
-                {
-                    "agent_run_id": agent_run.id,
-                    "title": ticket_title,
-                    "body": ticket_body,
-                },
-                session,
-                ToolExecutionContext(
-                    agent_run_id=agent_run.id,
-                    step_id=step.id,
-                    invocation_source="agent_runner",
-                ),
-            )
-            if ticket_result.status == "executed":
-                state.final_recommendation.ticket_draft_id = str(ticket_result.output.get("ticket_draft_id"))
+        # Candidate snapshots are intentionally persisted as unvalidated. The
+        # watchdog step owns the later transition and ticket creation.
+        recommendation.lifecycle_state = RecommendationState.CANDIDATE
+        recommendation.review_valid = False
+        recommendation.policy_version = None
+        recommendation.watchdog_decision = None
+        recommendation.watchdog_status = None
+        recommendation.watchdog_summary = None
+        recommendation.watchdog_findings = []
+        recommendation.ticket_draft_id = None
+        if not recommendation.proposed_actions:
+            evidence_ids = [item.evidence_id for item in state.evidence_items]
+            recommendation.proposed_actions = [ProposedAction(action_type="review_evidence",
+                target=str(state.alert_id), supporting_evidence_ids=evidence_ids, rationale=text)
+                for text in recommendation.recommended_next_steps]
+            recommendation.proposed_actions.extend(ProposedAction(action_type=item.tool_name,
+                target=item.target, supporting_evidence_ids=evidence_ids, rationale=item.rationale,
+                risk_level="high", requires_approval=True) for item in state.blocked_tools)
 
         return state.final_recommendation.model_dump(mode="json")
 
@@ -665,12 +658,14 @@ def generate_recommendation(session: Session, agent_run: AgentRun, state: AgentS
 
 
 def watchdog_policy_check(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
-    def handler(_: AgentStep) -> dict[str, Any]:
+    def handler(step: AgentStep) -> dict[str, Any]:
         alert_payload = state.alert_summary.model_dump(mode="json") if state.alert_summary else {}
         if state.alert_classification:
             alert_payload["classification"] = state.alert_classification
 
         watchdog_input = WatchdogInput(
+            agent_run_id=state.agent_run_id,
+            proposed_actions=state.final_recommendation.proposed_actions if state.final_recommendation else [],
             alert=alert_payload,
             retrieved_context=[item.model_dump(mode="json") for item in state.retrieved_context],
             tool_results=[item.model_dump(mode="json") for item in state.tool_results],
@@ -690,6 +685,10 @@ def watchdog_policy_check(session: Session, agent_run: AgentRun, state: AgentSta
         state.watchdog_decision = decision.model_dump(mode="json")
 
         if state.final_recommendation is not None:
+            state.final_recommendation.lifecycle_state = RecommendationState.BLOCKED if decision.blocking else RecommendationState.PENDING_HUMAN_REVIEW
+            state.final_recommendation.review_valid = not decision.blocking
+            state.final_recommendation.policy_version = decision.policy_version
+            state.final_recommendation.watchdog_decision = decision.model_dump(mode="json")
             state.final_recommendation.watchdog_status = decision.status.value
             state.final_recommendation.watchdog_summary = decision.summary
             state.final_recommendation.watchdog_findings = [
@@ -705,11 +704,49 @@ def watchdog_policy_check(session: Session, agent_run: AgentRun, state: AgentSta
                 state.final_recommendation.notes.append(f"Watchdog status: {decision.status.value}.")
             state.final_recommendation.requires_human_approval = True
 
+        # Publish the policy snapshot before dispatching the separately committed
+        # ticket tool. No ticket can claim validation before this step.
+        step.output_snapshot = {"watchdog_decision": decision.model_dump(mode="json"),
+            "final_recommendation": state.final_recommendation.model_dump(mode="json") if state.final_recommendation else None}
+        session.add(step)
+        session.commit()
+        alert_type = str(state.alert_classification.get("alert_type") or "unknown")
+        if alert_type != "unknown":
+            ticket_title = f"OpsGuard AI draft: {state.alert_summary.title if state.alert_summary else alert_type}"
+            ticket_body = "\n".join(
+                [
+                    state.final_recommendation.summary,
+                    "",
+                    "Recommended next steps:",
+                    *[f"- {item}" for item in state.final_recommendation.recommended_next_steps],
+                    "",
+                    "Uncertainty:",
+                    state.final_recommendation.uncertainty,
+                ]
+            )
+            ticket_result = execute_tool(
+                "create_ticket_draft",
+                {
+                    "title": ticket_title,
+                    "body": ticket_body,
+                },
+                session,
+                ToolExecutionContext(
+                    agent_run_id=agent_run.id,
+                    step_id=step.id,
+                    invocation_source="agent_runner",
+                    policy_decision=decision,
+                ),
+            )
+            if ticket_result.status == "executed":
+                state.final_recommendation.ticket_draft_id = str(ticket_result.output.get("ticket_draft_id"))
+
         state.requires_human_approval = True
         if decision.status.value in {"block", "require_human_approval"}:
             state.status = "waiting_for_human"
 
         return {
+            "watchdog_decision": decision.model_dump(mode="json"),
             "watchdog_status": decision.status.value,
             "watchdog_summary": decision.summary,
             "findings": [finding.model_dump(mode="json") for finding in decision.findings],

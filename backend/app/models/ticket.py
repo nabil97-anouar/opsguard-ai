@@ -22,4 +22,7 @@ class TicketDraft(UUIDPrimaryKeyMixin, CreatedAtMixin, table=True):
     kill_chain_stage: str | None = Field(default=None, max_length=100)
     assigned_team: str = Field(max_length=100)
     sla_target: str = Field(max_length=50)
+    lifecycle_state: str = Field(default="candidate", max_length=40)
+    policy_validation: str = Field(default="not_evaluated", max_length=40)
+    policy_version: str | None = None
     exported: bool = False

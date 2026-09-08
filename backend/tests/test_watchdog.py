@@ -31,52 +31,7 @@ def build_seeded_engine(monkeypatch):
     return test_engine
 
 
-def base_watchdog_input(**overrides) -> WatchdogInput:
-    payload = {
-        "alert": {"severity": "warning", "title": "Safe operational note"},
-        "retrieved_context": [],
-        "tool_results": [],
-        "hypotheses": [
-            {
-                "title": "Benign hypothesis",
-                "summary": "This looks like a bounded operational issue.",
-                "supporting_evidence": ["EVIDENCE-1"],
-            }
-        ],
-        "evidence_items": [
-            {
-                "summary": "Trusted runbook excerpt",
-                "citation": "Runbook A chunk 1",
-                "trust_level": "trusted",
-                "suspicious": False,
-            }
-        ],
-        "planned_tools": [],
-        "blocked_tools": [],
-        "self_assessment": {
-            "confidence_score": 0.9,
-            "missing_evidence": [],
-            "uncertainty_level": "low",
-        },
-        "final_recommendation": {
-            "summary": "Review the trusted runbook and continue with human oversight.",
-            "evidence": [
-                {
-                    "summary": "Trusted runbook excerpt",
-                    "citation": "Runbook A chunk 1",
-                    "trust_level": "trusted",
-                    "suspicious": False,
-                }
-            ],
-            "citations": ["Runbook A chunk 1"],
-            "recommended_next_steps": ["Open a draft ticket for follow-up."],
-            "blocked_actions_requiring_human_approval": [],
-            "missing_evidence": [],
-            "notes": [],
-        },
-    }
-    payload.update(overrides)
-    return WatchdogInput.model_validate(payload)
+from app.harness.fixtures import base_watchdog_input
 
 
 def test_dangerous_action_policy_flags_recommendation() -> None:
@@ -97,7 +52,7 @@ def test_dangerous_action_policy_flags_recommendation() -> None:
     findings = dangerous_action_policy(payload)
 
     assert len(findings) == 1
-    assert findings[0].status in {"require_human_approval", "block"}
+    assert findings[0].status == "block"
     assert findings[0].policy_id == "dangerous_action_policy"
 
 
@@ -117,7 +72,7 @@ def test_prompt_injection_policy_flags_suspicious_context() -> None:
     findings = prompt_injection_policy(payload)
 
     assert len(findings) == 1
-    assert findings[0].status in {"require_human_approval", "block"}
+    assert findings[0].status == "block"
     assert "Poisoned Runbook chunk 2" in findings[0].evidence_refs
 
 
@@ -186,7 +141,7 @@ def test_weak_grounding_policy_flags_missing_support() -> None:
     findings = weak_grounding_policy(payload)
 
     assert len(findings) == 1
-    assert findings[0].status in {"warning", "require_human_approval"}
+    assert findings[0].status == "require_human_approval"
 
 
 def test_bulk_operation_policy_blocks_cluster_wide_scope() -> None:
@@ -205,7 +160,7 @@ def test_bulk_operation_policy_blocks_cluster_wide_scope() -> None:
     findings = bulk_operation_policy(payload)
 
     assert len(findings) == 1
-    assert findings[0].status in {"require_human_approval", "block"}
+    assert findings[0].status == "block"
 
 
 def test_unsafe_tool_output_policy_flags_suspicious_tool_output() -> None:
@@ -229,7 +184,7 @@ def test_unsafe_tool_output_policy_flags_suspicious_tool_output() -> None:
 def test_clean_watchdog_evaluation_allows_safe_recommendation() -> None:
     decision = evaluate_watchdog(base_watchdog_input())
 
-    assert decision.status in {PolicyDecisionStatus.ALLOW, PolicyDecisionStatus.ALLOW_WITH_WARNINGS}
+    assert decision.status == PolicyDecisionStatus.ALLOW
     assert not decision.findings
 
 
@@ -373,7 +328,8 @@ def test_watchdog_api_endpoints(monkeypatch) -> None:
     )
     assert safe_response.status_code == 200
     safe_payload = safe_response.json()
-    assert safe_payload["status"] in {"allow", "allow_with_warnings"}
+    assert safe_payload["status"] == "block"
+    assert any(finding["policy_id"] == "grounding_reference_integrity" for finding in safe_payload["findings"])
 
     dangerous_response = client.post(
         "/api/v1/watchdog/evaluate",
@@ -393,13 +349,13 @@ def test_watchdog_api_endpoints(monkeypatch) -> None:
     )
     assert dangerous_response.status_code == 200
     dangerous_payload = dangerous_response.json()
-    assert dangerous_payload["status"] in {"require_human_approval", "block"}
+    assert dangerous_payload["status"] == "block"
 
     policies_response = client.get("/api/v1/watchdog/policies")
     assert policies_response.status_code == 200
     policies_payload = policies_response.json()
     assert policies_payload["status"] == "ok"
-    assert len(policies_payload["items"]) == 7
+    assert len(policies_payload["items"]) == 8
 
 
 def test_no_shell_execution_in_watchdog_package() -> None:

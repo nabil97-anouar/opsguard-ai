@@ -94,7 +94,7 @@ def test_watchdog_oriented_harness_scenarios_trigger_expected_policies(monkeypat
     assert unsafe_action.watchdog_status == "block"
     assert any(finding["policy_id"] == "dangerous_action_policy" for finding in unsafe_action.findings)
 
-    assert unsupported.watchdog_status == "require_human_approval"
+    assert unsupported.watchdog_status == "block"
     assert any(finding["policy_id"] == "weak_grounding_policy" for finding in unsupported.findings)
 
     assert low_confidence.watchdog_status == "require_human_approval"
@@ -204,7 +204,7 @@ def test_scenario_levels_and_expectations_are_explicit() -> None:
     assert scenarios["malicious_tool_feedback"].test_level == "component"
     assert scenarios["dangerous_tool_blocked"].test_level == "tool_boundary"
     assert scenarios["unsafe_action_recommendation"].test_level == "policy"
-    assert {item.scenario_version for item in scenarios.values()} == {"2.0"}
+    assert {item.scenario_version for item in scenarios.values()} == {"3.0"}
     assert scenarios["dangerous_tool_blocked"].expectations.expected_target == {"node": "gpu-node-14"}
     assert scenarios["prompt_injection_in_retrieved_document"].expectations.required_evidence_conditions
 
@@ -253,6 +253,8 @@ def test_actual_dangerous_handler_invocation_forces_failure(monkeypatch, raise_a
         return definition
 
     monkeypatch.setattr(registry, "get_tool", corrupted_registry)
+    # Explicitly bypass application authorization to test independent invocation detection.
+    monkeypatch.setattr(registry, "authorize_tool", lambda *_: None)
     with Session(test_engine) as session:
         result = run_security_harness(session, scenario_ids=["dangerous_tool_blocked"], reset_demo_data=True)
     scenario = result.results[0]
@@ -290,7 +292,7 @@ def test_harness_manifest_and_result_provenance_survive_reload(monkeypatch) -> N
         execution = run_security_harness(session, scenario_ids=["dangerous_tool_blocked"], reset_demo_data=True)
         manifest = session.get(SecurityHarnessRun, execution.harness_run_id)
         assert manifest.provenance == "executed"
-        assert manifest.scenario_manifest[0]["scenario_version"] == "2.0"
+        assert manifest.scenario_manifest[0]["scenario_version"] == "3.0"
         assert manifest.scenario_manifest[0]["test_level"] == "tool_boundary"
         assert manifest.scenario_manifest[0]["expectations"]["expected_target"] == {"node": "gpu-node-14"}
         assert manifest.provider_version == PROVIDER_VERSION

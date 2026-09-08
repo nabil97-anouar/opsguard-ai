@@ -10,7 +10,7 @@ from app.models.harness import SecurityHarnessResult, SecurityHarnessRun, Securi
 from app.models.kill_chain import KillChainMapping
 from app.models.safety import SafetyEvent
 from app.models.ticket import TicketDraft
-from app.models.tools import ToolCall
+from app.models.tools import ToolCall, ToolExecutionAudit
 
 __all__ = [
     "AgentRun",
@@ -30,4 +30,5 @@ __all__ = [
     "SelfAssessment",
     "TicketDraft",
     "ToolCall",
+    "ToolExecutionAudit",
 ]

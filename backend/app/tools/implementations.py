@@ -329,7 +329,6 @@ def retrieve_runbook_handler(
 
 
 class CreateTicketDraftInput(BaseModel):
-    agent_run_id: UUID | None = None
     title: str = Field(min_length=1, max_length=500)
     body: str = Field(min_length=1, max_length=5000)
 
@@ -338,19 +337,22 @@ class CreateTicketDraftOutput(BaseModel):
     ticket_draft_id: str
     status: str
     title: str
+    lifecycle_state: str
+    policy_validation: str
+    policy_version: str | None
 
 
 def create_ticket_draft_handler(
     validated_input: CreateTicketDraftInput,
     session: Session,
-    _: ToolExecutionContext,
+    context: ToolExecutionContext,
 ) -> dict[str, Any]:
-    if validated_input.agent_run_id is None:
+    if context.agent_run_id is None:
         raise ValueError("agent_run_id is required to persist a ticket draft with the current data model.")
 
-    agent_run = session.get(AgentRun, validated_input.agent_run_id)
+    agent_run = session.get(AgentRun, context.agent_run_id)
     if agent_run is None:
-        raise ValueError(f"Agent run '{validated_input.agent_run_id}' was not found.")
+        raise ValueError(f"Agent run '{context.agent_run_id}' was not found.")
 
     alert = session.get(Alert, agent_run.alert_id)
     if alert is None:
@@ -376,6 +378,9 @@ def create_ticket_draft_handler(
         kill_chain_stage=None,
         assigned_team=_assigned_team_for_alert(alert),
         sla_target=_sla_target_for_severity(alert.severity),
+        lifecycle_state=("blocked" if context.policy_decision.blocking else "pending_human_review") if context.policy_decision else "candidate",
+        policy_validation="evaluated" if context.policy_decision else "not_evaluated",
+        policy_version=context.policy_decision.policy_version if context.policy_decision else None,
         exported=False,
     )
     session.add(ticket_draft)
@@ -385,6 +390,9 @@ def create_ticket_draft_handler(
         "ticket_draft_id": str(ticket_draft.id),
         "status": "draft",
         "title": ticket_draft.title,
+        "lifecycle_state": ticket_draft.lifecycle_state,
+        "policy_validation": ticket_draft.policy_validation,
+        "policy_version": ticket_draft.policy_version,
     }
 
 

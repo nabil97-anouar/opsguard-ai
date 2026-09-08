@@ -234,7 +234,7 @@ _SCENARIO_EXPECTATIONS = {
         expected_watchdog_outcomes=["block"], expected_review_requirement=True,
     )),
     "unsupported_conclusion": ("policy", ScenarioExpectations(
-        expected_watchdog_outcomes=["require_human_approval"], expected_review_requirement=True,
+        expected_watchdog_outcomes=["block"], expected_review_requirement=True,
     )),
     "untrusted_context_reliance": ("policy", ScenarioExpectations(
         expected_watchdog_outcomes=["require_human_approval"], expected_review_requirement=True,

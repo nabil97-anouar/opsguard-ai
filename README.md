@@ -13,7 +13,7 @@ A FastAPI service runs the investigation through a closed tool registry and a fi
 - Document ingestion, section-aware character chunking, and deterministic lexical retrieval over SQL data.
 - Run-scoped evidence snapshots with source, document, chunk, and tool-call identifiers, timestamps, trust labels, and screening findings.
 - Seven executable local tools for observations, runbook retrieval, incident lookup, and internal ticket drafting.
-- Persisted investigation steps, tool-call records, assessments, and watchdog findings.
+- Persisted investigation steps, every tool invocation attempt (including denials), assessments, and typed watchdog findings.
 - Nine security regression scenarios covering retrieved content, tool output, unsafe actions, and review requirements.
 - Dashboard inspection and stored Markdown/JSON reports with explicit execution cohorts, versions, provenance, and metric denominators.
 
@@ -51,7 +51,7 @@ External context is data, not authority to change the workflow or tool registry.
 
 Public ingestion cannot assign trusted authority. Retrieval applies the most restrictive document, chunk, and metadata trust label, excludes quarantined content, and requires lexical relevance. Failed and blocked tool attempts remain audit records rather than supporting evidence. Historical views show only the evidence recorded during that run.
 
-The closed registry validates tool inputs and outputs. Five destructive action definitions return blocked responses: canceling jobs, draining or isolating nodes, blocking users, and disabling services. Watchdog policies inspect the recommendation and recorded context for dangerous actions, suspicious content, weak grounding, and low confidence.
+The closed registry validates tool inputs and outputs. Five destructive action definitions return blocked responses: canceling jobs, draining or isolating nodes, blocking users, and disabling services. Watchdog policies inspect typed action intent and parameters first, keeping evidence separate from proposals. They validate same-run references to valid observations and supplement those checks with normalized proposal-text and suspicious-content screening. Recommendations remain candidates until policy review; local tickets record pending-review or blocked lifecycle after that decision.
 
 Every successful investigation ends in a human-review state. This is a terminal handoff, not an approve/reject/resume execution mechanism. See the [safety boundaries and enforcement limits](docs/SECURITY_BOUNDARIES.md).
 
@@ -147,12 +147,12 @@ OpsGuard currently uses deterministic local reasoning for reproducible developme
 
 Human review is currently a terminal workflow state; authenticated approval and post-approval execution are not implemented. The API has no authentication and is intended for local use. Qdrant is present in Compose but is unused by retrieval; external model providers are not implemented.
 
-Trust labels do not authenticate sources, and valid evidence references do not establish semantic support for a claim. Audit completeness and database reset behavior have known gaps. Pattern screening is limited, and assessment values are uncalibrated. Consult the [security boundaries](docs/SECURITY_BOUNDARIES.md), [retrieval reference](docs/RAG_DESIGN.md), and [evaluation limitations](docs/EVALUATION.md) before extending the system.
+Trust labels do not authenticate sources, and valid evidence references do not establish semantic support for a claim. Audit persistence requires a working database; crashes may leave incomplete invocation checkpoints. Audit rows are not tamper-evident, and fixture resets require care. Pattern screening is limited, and assessment values are uncalibrated. Consult the [security boundaries](docs/SECURITY_BOUNDARIES.md), [retrieval reference](docs/RAG_DESIGN.md), and [evaluation limitations](docs/EVALUATION.md) before extending the system.
 
 ## Roadmap
 
 - Reviewed trust promotion, source authentication, and claim-level support checks.
 - Broader independently labeled evaluation cases and isolated benchmark environments.
-- Consistent tool-invocation auditing, transaction recovery, and database migrations.
+- Recovery of interrupted executions and broader database migration support.
 - An injected reasoning-provider interface that preserves deterministic testing.
 - Authenticated review workflows and bounded external integrations.

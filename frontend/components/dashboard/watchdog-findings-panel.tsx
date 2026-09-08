@@ -1,3 +1,4 @@
+import { watchdogVerdict, recommendationLifecycle, badgeToneClasses } from "@/lib/safety-status";
 import { ShieldAlert } from "lucide-react";
 
 import { JsonInspector } from "@/components/dashboard/json-inspector";
@@ -13,6 +14,7 @@ export function WatchdogFindingsPanel({
   recommendation
 }: WatchdogFindingsPanelProps) {
   const findings = recommendation?.watchdog_findings ?? [];
+  const verdict = watchdogVerdict(recommendation?.watchdog_decision?.verdict ?? recommendation?.watchdog_status);
 
   return (
     <Card className="border-white/8 bg-white/[0.03]">
@@ -29,11 +31,14 @@ export function WatchdogFindingsPanel({
         </div>
 
         {recommendation?.watchdog_status ? (
-          <SafetyBadge value={recommendation.watchdog_status} />
+          <span className={`rounded-full border px-3 py-1 text-xs ${badgeToneClasses[verdict.tone]}`}>{verdict.label}</span>
         ) : null}
       </div>
 
       <div className="mt-8 space-y-4">
+        <p className="text-sm text-slate-200">{recommendationLifecycle(recommendation?.lifecycle_state)}</p>
+        {recommendation?.watchdog_decision ? <p className="text-sm text-slate-300">Blocking: {recommendation.watchdog_decision.blocking ? "yes" : "no"} · Mandatory review: {recommendation.watchdog_decision.mandatory_review ? "yes" : "no"} · Policy {recommendation.watchdog_decision.policy_version}</p> : null}
+        {recommendation?.proposed_actions?.length ? <JsonInspector title="Proposed actions — separate from evidence" data={recommendation.proposed_actions} /> : null}
         {recommendation?.watchdog_summary ? (
           <div className="rounded-2xl border border-accent/20 bg-accent/10 p-4">
             <p className="text-sm leading-6 text-slate-50">
@@ -52,7 +57,7 @@ export function WatchdogFindingsPanel({
         {findings.map((finding) => (
           <div
             className="rounded-2xl border border-white/8 bg-ink/60 p-5"
-            key={finding.policy_id}
+            key={finding.finding_id ?? finding.policy_id}
           >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
@@ -75,6 +80,8 @@ export function WatchdogFindingsPanel({
               </div>
             </div>
 
+            <p className="mt-3 text-sm text-slate-300">Blocking: {finding.blocking === undefined ? "unknown" : finding.blocking ? "yes" : "no"} · Review required: {finding.mandatory_review === undefined ? "unknown" : finding.mandatory_review ? "yes" : "no"}</p>
+            <p className="mt-2 break-all text-xs text-slate-400">Finding {finding.finding_id ?? "historical"} · Affected actions: {finding.affected_action_ids?.join(", ") || "none identified"}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400">

@@ -3,7 +3,8 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
+from app.models import ToolExecutionAudit
 
 from app.agent.runner import (
     get_agent_run_detail,
@@ -94,6 +95,8 @@ def get_agent_run_route(agent_run_id: UUID, session: Session = Depends(get_sessi
         error_message=agent_run.error_message,
         steps=[AgentStepResponse.model_validate(step) for step in steps],
         tool_calls=[ToolCallRead.model_validate(tool_call) for tool_call in tool_calls],
+        tool_attempts=[row.model_dump(mode="json") for row in session.exec(select(ToolExecutionAudit)
+            .where(ToolExecutionAudit.agent_run_id == agent_run_id).order_by(ToolExecutionAudit.requested_at)).all()],
         self_assessment=(
             AgentAssessmentResponse.model_validate(self_assessment) if self_assessment is not None else None
         ),

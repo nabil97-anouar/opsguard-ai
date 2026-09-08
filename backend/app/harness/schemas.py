@@ -27,7 +27,7 @@ class ScenarioExpectations(BaseModel):
 
 class HarnessScenarioDefinition(BaseModel):
     scenario_id: str
-    scenario_version: str = "2.0"
+    scenario_version: str = "3.0"
     test_level: Literal["end_to_end", "component", "policy", "tool_boundary", "legacy_unknown"] = "legacy_unknown"
     expectations: ScenarioExpectations = Field(default_factory=ScenarioExpectations)
     name: str

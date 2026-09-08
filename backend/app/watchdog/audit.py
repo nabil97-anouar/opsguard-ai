@@ -21,15 +21,15 @@ def record_watchdog_decision(
             SafetyEvent.source == "watchdog",
         )
     ).all()
-    existing_policy_ids = {
-        str((event.details or {}).get("policy_id"))
+    existing_finding_ids = {
+        str((event.details or {}).get("finding_id"))
         for event in existing_events
-        if (event.details or {}).get("policy_id")
+        if (event.details or {}).get("finding_id")
     }
 
     created_events: list[SafetyEvent] = []
     for finding in decision.findings:
-        if finding.severity == "info" or finding.policy_id in existing_policy_ids:
+        if finding.severity == "info" or finding.finding_id in existing_finding_ids:
             continue
 
         event = SafetyEvent(
@@ -40,6 +40,13 @@ def record_watchdog_decision(
             source="watchdog",
             affected_component=finding.policy_id,
             details={
+                "finding_id": finding.finding_id,
+                "finding_type": finding.finding_type,
+                "affected_action_ids": finding.affected_action_ids,
+                "blocking": finding.blocking,
+                "mandatory_review": finding.mandatory_review,
+                "verdict": decision.verdict.value,
+                "policy_version": decision.policy_version,
                 "policy_id": finding.policy_id,
                 "decision_status": finding.status,
                 "reason": finding.reason,
@@ -52,7 +59,7 @@ def record_watchdog_decision(
         )
         session.add(event)
         created_events.append(event)
-        existing_policy_ids.add(finding.policy_id)
+        existing_finding_ids.add(finding.finding_id)
 
     session.flush()
     return created_events

@@ -108,6 +108,9 @@ export type ToolListResponse = {
 };
 
 export type ToolCall = {
+  handler_invoked?: boolean | null;
+  outcome?: string;
+  origin?: string;
   id: string;
   agent_run_id: string;
   step_id: string;
@@ -136,6 +139,11 @@ export type AgentAssessment = {
 };
 
 export type WatchdogFinding = {
+  finding_id?: string;
+  finding_type?: string;
+  affected_action_ids?: string[];
+  blocking?: boolean;
+  mandatory_review?: boolean;
   policy_id: string;
   title: string;
   severity: string;
@@ -170,6 +178,11 @@ export type EvidenceItem = {
 };
 
 export type FinalRecommendation = {
+  proposed_actions?: ProposedAction[];
+  lifecycle_state?: "candidate" | "pending_human_review" | "blocked";
+  review_valid?: boolean;
+  policy_version?: string | null;
+  watchdog_decision?: WatchdogDecision | null;
   summary: string;
   // Older stored runs may contain the previous, less complete evidence shape.
   evidence: Array<EvidenceItem | Record<string, unknown>>;
@@ -225,6 +238,7 @@ export type AgentRunDetailResponse = {
   error_message: string | null;
   steps: AgentStep[];
   tool_calls: ToolCall[];
+  tool_attempts?: ToolAttempt[];
   self_assessment: AgentAssessment | null;
   final_recommendation: FinalRecommendation | null;
 };
@@ -385,3 +399,46 @@ export const DEMO_ALERT_IDS = {
   gpuAbuse: "909d28d2-5c9f-5fa2-a35e-f6b39c95f83f",
   promptInjection: "e3e0e0d5-9e19-5243-a1f0-76c507be3641"
 } as const;
+
+
+export type ProposedAction = {
+  action_id: string;
+  action_type: string;
+  target: string | null;
+  parameters: Record<string, unknown>;
+  risk_level: "low" | "medium" | "high" | "critical";
+  requires_approval: boolean;
+  supporting_evidence_ids: string[];
+  rationale: string;
+};
+
+export type WatchdogDecision = {
+  verdict: "allow" | "allow_with_warnings" | "require_human_approval" | "block";
+  blocking: boolean;
+  mandatory_review: boolean;
+  policy_version: string;
+  severity: string;
+  reason: string;
+  affected_action_ids: string[];
+  finding_ids: string[];
+};
+
+export type ToolAttempt = {
+  id: string;
+  agent_run_id: string | null;
+  step_id: string | null;
+  tool_name: string;
+  origin: string;
+  input_snapshot: unknown;
+  validated_target: Record<string, unknown>;
+  outcome: "requested" | "validated" | "denied" | "invoked" | "succeeded" | "failed";
+  validated: boolean;
+  handler_invoked: boolean;
+  requested_at: string;
+  invoked_at: string | null;
+  completed_at: string | null;
+  output_snapshot: unknown;
+  error_code: string | null;
+  user_error: string | null;
+  diagnostic: Record<string, unknown>;
+};

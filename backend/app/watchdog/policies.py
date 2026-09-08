@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Callable
 
 from app.rag.injection import detect_prompt_injection
+from app.agent.actions import normalize_intent, ProposedAction
 from app.watchdog.schemas import PolicySeverity, WatchdogFinding, WatchdogInput
 
 PolicyHandler = Callable[[WatchdogInput], list[WatchdogFinding]]
@@ -34,7 +36,7 @@ BULK_OPERATION_PATTERNS = (
     "cluster-wide",
     "wildcard",
 )
-NODE_PATTERN = re.compile(r"\b[a-z]+-node-\d+\b")
+NODE_PATTERN = re.compile(r"\b[a-z]+[-\s]+node[-\s]+\d+\b")
 JOB_PATTERN = re.compile(r"\bjob[-\s]?\d+\b")
 USER_PATTERN = re.compile(r"\buser[:\s-]*[a-z0-9_.-]+\b")
 
@@ -93,36 +95,63 @@ def _severity_sort_value(severity: PolicySeverity) -> int:
     }[severity]
 
 
+def _proposal_fragments(payload: WatchdogInput) -> list[str]:
+    """Only proposal fields: observations/hypotheses never establish action intent."""
+    recommendation = payload.final_recommendation or {}
+    summary = str(recommendation.get("summary", ""))
+    values = [*recommendation.get("recommended_next_steps", [])]
+    if _intent_bearing(summary):
+        values.append(summary)
+    values.extend(_normalized_json(action) for action in recommendation.get("blocked_actions_requiring_human_approval", []))
+    values.extend(_normalized_json(item) for item in payload.blocked_tools + payload.planned_tools)
+    return [normalize_intent(str(value)) for value in values]
+
+
+def _intent_bearing(text: str) -> bool:
+    normalized = normalize_intent(text)
+    # Deterministic fallback for proposal language. Observation summaries such as
+    # "logs mention DELETE" remain observations; this is not semantic analysis.
+    return bool(re.search(r"\b(?:execute|recommend|perform|run|should|must)\b", normalized)) or any(
+        normalized.startswith(normalize_intent(phrase)) for phrase, _ in DANGEROUS_ACTION_PATTERNS
+    )
+
+
+def _action_text(action: ProposedAction) -> str:
+    return normalize_intent(_normalized_json({"action_type": action.action_type.value,
+        "parameters": action.parameters, "target": action.target,
+        "rationale": action.rationale if _intent_bearing(action.rationale) else ""}))
+
+
+def _dangerous_matches(text: str) -> list[str]:
+    tokens = " " + normalize_intent(text) + " "
+    return [label for phrase, label in DANGEROUS_ACTION_PATTERNS
+            if " " + normalize_intent(phrase) + " " in tokens
+            or " " + normalize_intent(phrase).replace(" ", "") + " " in tokens
+            or re.search(r"\b" + r"\s*".join(normalize_intent(phrase).replace(" ", "")) + r"\b", tokens)]
+
+
 def dangerous_action_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
-    combined_text = " ".join(_text_fragments(payload))
-    matched = [label for phrase, label in DANGEROUS_ACTION_PATTERNS if phrase in combined_text]
-    blocked_actions = payload.final_recommendation.get("blocked_actions_requiring_human_approval", []) if payload.final_recommendation else []
-
-    if not matched and not blocked_actions:
-        return []
-
-    evidence_refs = [f"recommendation://{action.get('tool_name')}" for action in blocked_actions if action.get("tool_name")]
-    if not evidence_refs:
-        evidence_refs = [f"keyword://{value}" for value in matched]
-
-    status = "block" if any(item in {"delete", "shutdown"} for item in matched) else "require_human_approval"
-    severity = PolicySeverity.CRITICAL if status == "block" else PolicySeverity.HIGH
-    return [
-        WatchdogFinding(
-            policy_id="dangerous_action_policy",
-            title="Dangerous infrastructure action detected",
-            severity=severity,
-            status=status,
-            reason=(
-                "The recommendation references dangerous or disruptive infrastructure actions that must never be executed autonomously."
-            ),
-            evidence_refs=evidence_refs,
-            remediation=(
-                "Keep the action recommendation-only, require explicit human approval, and do not execute it in the agent workflow."
-            ),
-            metadata={"matched_actions": sorted(set(matched))},
-        )
-    ]
+    actions = [action for action in payload.proposed_actions if _dangerous_matches(_action_text(action))]
+    matched = sorted({match for text in _proposal_fragments(payload) + [_action_text(action) for action in actions]
+                      for match in _dangerous_matches(text)})
+    if not matched:
+        review_actions = [action for action in payload.proposed_actions if action.requires_approval]
+        if not review_actions:
+            return []
+        return [WatchdogFinding(policy_id="dangerous_action_policy", title="Proposed action requires human review",
+            severity=PolicySeverity.HIGH, status="require_human_approval",
+            affected_action_ids=[action.action_id for action in review_actions],
+            reason="The structured proposal explicitly requires approval; no approval/resume capability exists.",
+            remediation="Keep the proposal pending human review; do not infer authorization from this verdict.")]
+    return [WatchdogFinding(
+        policy_id="dangerous_action_policy", title="Disruptive proposed action",
+        severity=PolicySeverity.CRITICAL, status="block",
+        affected_action_ids=[action.action_id for action in actions],
+        reason="A proposed action contains disruptive intent. Autonomous execution is forbidden.",
+        evidence_refs=[f"recommendation://{match}" for match in matched],
+        remediation="Preserve the blocked proposal for human inspection; do not execute it.",
+        metadata={"matched_actions": matched},
+    )]
 
 
 def prompt_injection_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
@@ -273,7 +302,7 @@ def weak_grounding_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
     return [
         WatchdogFinding(
             policy_id="weak_grounding_policy",
-            title="Recommendation has weak evidence grounding",
+            title="Recommendation has missing supporting references",
             severity=severity_value,
             status=status,
             reason=" ".join(reasons),
@@ -290,44 +319,105 @@ def weak_grounding_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
     ]
 
 
+def broad_scope(value: Any, key: str = "") -> bool:
+    """Inspect typed scope parameters recursively; normalization includes punctuation."""
+    normalized_key = normalize_intent(key).replace(" ", "")
+    target_keys = {"target", "targets", "node", "nodes", "user", "users", "job", "jobs", "selector", "selectors", "scope"}
+    count_keys = {"targetcount", "nodecount", "jobcount", "usercount"}
+    all_keys = {"all", "allnodes", "alljobs", "allusers", "bulk", "wildcard", "matchall"}
+    if isinstance(value, dict):
+        if normalized_key in {"selector", "selectors"} and (not value or {normalize_intent(str(name)) for name in value} - {"id", "node", "job", "user", "name"}):
+            return True
+        return any(broad_scope(item, str(name)) for name, item in value.items())
+    if isinstance(value, list):
+        return (normalized_key in target_keys and len(value) > 1) or any(broad_scope(item, key) for item in value)
+    if isinstance(value, bool):
+        return value and normalized_key in all_keys
+    if isinstance(value, (int, float)):
+        return normalized_key in count_keys and value > 1
+    if isinstance(value, str):
+        value = unicodedata.normalize("NFKC", value)
+        if normalized_key in all_keys and normalize_intent(value) in {"true", "yes", "1"}:
+            return True
+        if normalized_key in {"selector", "selectors"} and not re.fullmatch(r"(?:id|node|job|user|name)\s*[:=]\s*[a-zA-Z0-9_.-]+", value.strip(), re.I):
+            return True
+        if normalized_key in target_keys and (len([part for part in re.split(r"[,;]", value) if part.strip()]) > 1 or len(set(NODE_PATTERN.findall(value.lower()))) > 1):
+            return True
+        if normalized_key in count_keys:
+            try:
+                return float(value.strip()) > 1
+            except ValueError:
+                return True  # Unparseable declared counts cannot establish bounded scope.
+        text = normalize_intent(value)
+        compact = text.replace(" ", "")
+        return (any(char in value for char in "*?") and normalized_key in target_keys) or any(
+            re.search(r"\b" + re.escape(normalize_intent(pattern)) + r"\b", text) or normalize_intent(pattern).replace(" ", "") == compact
+            for pattern in BULK_OPERATION_PATTERNS
+        ) or (normalized_key in target_keys and text in {"all", "any", "everything"})
+    return False
+
+
 def bulk_operation_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
-    combined_text = " ".join(_text_fragments(payload))
-    matched_patterns = [pattern for pattern in BULK_OPERATION_PATTERNS if pattern in combined_text]
-    node_matches = sorted(set(NODE_PATTERN.findall(combined_text)))
-    job_matches = sorted(set(JOB_PATTERN.findall(combined_text)))
-    user_matches = sorted(set(USER_PATTERN.findall(combined_text)))
-
-    if not matched_patterns and len(node_matches) <= 3 and len(job_matches) <= 3 and len(user_matches) <= 3:
+    actions = [action for action in payload.proposed_actions if broad_scope(action.parameters)
+               or broad_scope(action.target, "target") or (_intent_bearing(action.rationale) and broad_scope(action.rationale))]
+    prose = " ".join(_proposal_fragments(payload))
+    matched = [pattern for pattern in BULK_OPERATION_PATTERNS if re.search(r"\b" + re.escape(normalize_intent(pattern)) + r"\b", prose)]
+    targets = set(NODE_PATTERN.findall(prose) + JOB_PATTERN.findall(prose) + USER_PATTERN.findall(prose))
+    if not actions and not matched and len(targets) <= 1:
         return []
+    return [WatchdogFinding(policy_id="bulk_operation_policy", title="Broad proposed action scope",
+        severity=PolicySeverity.CRITICAL, status="block",
+        affected_action_ids=[action.action_id for action in actions],
+        reason="The proposed operation selects multiple targets, an unbounded selector, or all-target scope.",
+        evidence_refs=[f"action://{action.action_id}" for action in actions],
+        remediation="Reduce the proposal to one explicit target and re-evaluate it.",
+        metadata={"matched_patterns": matched, "targets": sorted(targets)},
+    )]
 
-    status = "block" if matched_patterns or len(node_matches) > 5 or len(user_matches) > 5 else "require_human_approval"
-    severity = PolicySeverity.CRITICAL if status == "block" else PolicySeverity.HIGH
-    evidence_refs = [f"keyword://{pattern}" for pattern in matched_patterns]
-    evidence_refs.extend(f"node://{node}" for node in node_matches)
-    evidence_refs.extend(f"job://{job}" for job in job_matches)
-    evidence_refs.extend(f"user://{user}" for user in user_matches)
 
-    return [
-        WatchdogFinding(
-            policy_id="bulk_operation_policy",
-            title="Bulk or wide-scope action detected",
-            severity=severity,
-            status=status,
-            reason=(
-                "The workflow references cluster-wide or multi-target actions that are too broad for automatic handling."
-            ),
-            evidence_refs=evidence_refs,
-            remediation=(
-                "Reduce the scope to a single, well-supported target or require explicit human approval for the broader action."
-            ),
-            metadata={
-                "matched_patterns": matched_patterns,
-                "node_targets": node_matches,
-                "job_targets": job_matches,
-                "user_targets": user_matches,
-            },
-        )
-    ]
+def grounding_reference_integrity_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
+    """Structural resolution only. The caller must supply the authoritative source ledger."""
+    ledger = {item.get("evidence_id"): item for item in payload.evidence_items if item.get("evidence_id")}
+    run_id = str(payload.agent_run_id) if payload.agent_run_id else None
+    tool_observations = {str(item.get("tool_call_id")): item for item in payload.tool_results if item.get("tool_call_id")}
+
+    def valid(reference):
+        item = ledger.get(reference)
+        if not item or run_id is None or str(item.get("agent_run_id")) != run_id:
+            return False
+        if item.get("trust_level") not in {"trusted", "untrusted"}:
+            return False
+        if item.get("kind") == "tool_output":
+            observation = tool_observations.get(str(item.get("tool_call_id")))
+            return item.get("observation_status") == "succeeded" and observation is not None and observation.get("status") in {"succeeded", "executed"}
+        return item.get("observation_status") == "valid"
+
+    affected = []
+    failures = []
+    for action in payload.proposed_actions:
+        refs = action.supporting_evidence_ids
+        if not refs or not all(valid(ref) for ref in refs):
+            affected.append(action.action_id)
+            failures.append(f"action://{action.action_id}")
+    for index, hypothesis in enumerate(payload.hypotheses):
+        refs = hypothesis.get("supporting_evidence", [])
+        if not refs or not all(valid(ref) for ref in refs):
+            failures.append(f"hypothesis://{index}")
+    recommendation = payload.final_recommendation or {}
+    for item in recommendation.get("evidence", []):
+        if not valid(item.get("evidence_id")) or item != ledger.get(item.get("evidence_id")):
+            failures.append("recommendation://evidence_snapshot")
+    known_citations = {item.get("citation") for key, item in ledger.items() if valid(key)}
+    if any(ref not in known_citations for ref in recommendation.get("citations", [])):
+        failures.append("recommendation://citation")
+    if recommendation.get("summary") and not recommendation.get("evidence"):
+        failures.append("recommendation://missing_support")
+    if not failures:
+        return []
+    return [WatchdogFinding(policy_id="grounding_reference_integrity", title="Evidence reference integrity failed",
+        severity=PolicySeverity.HIGH, status="block", affected_action_ids=affected,
+        reason="Support is absent, unresolved, cross-run, invalid, failed/blocked, quarantined, or differs from its source snapshot.",
+        evidence_refs=sorted(set(failures)), remediation="Use successful same-run source observations; this check does not establish semantic entailment.")]
 
 
 def unsafe_tool_output_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
@@ -371,6 +461,9 @@ def unsafe_tool_output_policy(payload: WatchdogInput) -> list[WatchdogFinding]:
 
 
 POLICY_DEFINITIONS: tuple[WatchdogPolicyDefinition, ...] = (
+    WatchdogPolicyDefinition(policy_id="grounding_reference_integrity", title="Evidence reference integrity",
+        description="Checks same-run references to valid source observations, not semantic entailment.",
+        handler=grounding_reference_integrity_policy),
     WatchdogPolicyDefinition(
         policy_id="dangerous_action_policy",
         title="Dangerous action gate",

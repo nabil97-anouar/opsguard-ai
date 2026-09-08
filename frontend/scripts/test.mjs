@@ -19,6 +19,7 @@ try {
     include: [
       "lib/dashboard-data.ts", "lib/safety-status.ts", "lib/api.ts",
       "components/dashboard/tool-registry-groups.tsx", "components/dashboard/harness-results-panel.tsx",
+      "components/dashboard/tool-attempts-panel.tsx", "components/dashboard/tool-calls-panel.tsx", "components/dashboard/watchdog-findings-panel.tsx",
       "components/dashboard/evaluation-summary-card.tsx", "components/dashboard/agent-run-trace.tsx"
     ].map((file) => join(projectRoot, file)),
     exclude: [join(projectRoot, "node_modules")]

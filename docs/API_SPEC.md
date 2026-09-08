@@ -26,12 +26,13 @@ All paths below are relative to `/api/v1`.
 | GET | `/documents` | Document metadata list |
 | POST | `/rag/retrieve` | Retrieve scored document excerpts with trust and scan metadata |
 | GET | `/tools` | Tool definitions and input/output JSON schemas |
-| POST | `/tools/{tool_name}/execute` | Invoke a registered local tool or return a blocked result |
+| POST | `/tools/{tool_name}/execute` | Audit the attempt, enforce application policy, then dispatch or deny |
+| GET | `/tools/attempts` | Latest 100 authoritative tool attempts; optional `agent_run_id` filter |
 | POST | `/agent/runs` | Run an investigation for an existing alert |
 | GET | `/agent/runs` | Most recent 20 stored runs |
 | GET | `/agent/runs/{agent_run_id}` | Run metadata, steps, tools, assessment, and recommendation |
-| GET | `/watchdog/policies` | Seven implemented policy definitions |
-| POST | `/watchdog/evaluate` | Evaluate caller-supplied context; does not persist this standalone decision |
+| GET | `/watchdog/policies` | Eight implemented policy definitions |
+| POST | `/watchdog/evaluate` | Review supplied proposals against persisted same-run source evidence; does not persist this standalone decision |
 | GET | `/harness/scenarios` | Available scenario definitions |
 | POST | `/harness/run` | Run all or selected scenarios and persist results |
 | GET | `/harness/results` | Most recent 50 scenario results |
@@ -105,7 +106,13 @@ The response contains `status`, `query`, and `results`. Results include document
 }
 ```
 
-The response includes legacy `status` (`executed`, `blocked`, or `failed`), semantic `outcome` (`succeeded`, `blocked`, or `failed`), `tool_call_id`, `tool_name`, `trust_level`, `requires_human_approval`, `output`, `error`, and `created_at`. A run ID associates the call with the exact persisted investigation audit record; `tool_call_id` is null without run context. `GET /tools` exposes `executable` for each definition: seven local adapters are executable and five destructive definitions are blocked. Contextless calls and invalid requests have audit limitations described in [Tool Registry](TOOL_REGISTRY.md).
+The response includes legacy `status` (`executed`, `blocked`, or `failed`), canonical `outcome` (`succeeded`, `denied`, or `failed`), `handler_invoked`, `error_code`, `tool_call_id`, `tool_name`, `trust_level`, `requires_human_approval`, bounded `output`, user-safe `error`, and `created_at`. The call ID identifies a durable `ToolExecutionAudit`, including requests without run context. Only the outer `agent_run_id` owns the execution; inner IDs are ignored. Invalid run/step ownership is denied before invocation.
+
+Unknown tools return 404 and malformed/invalid inputs return 422 with structured `detail`: `message`, `tool_call_id`, `outcome: denied`, `handler_invoked: false` (schema validation adds `errors` without raw input). Policy denial and handler failure return 200 with the application outcome. Bodies over 64 KiB are denied and audited. Audit snapshots are bounded/redacted, and raw exception text is not returned or persisted.
+
+`GET /tools/attempts?agent_run_id=UUID` lists matching recent attempts, or all recent attempts without the filter. Each row exposes `id`, outer run/step IDs, requested tool/origin, input snapshot, authorized target, `validated`, outcome, `handler_invoked`, requested/invoked/completed timestamps, output snapshot, error code, user error and diagnostic exception type. `requested`, `validated` or `invoked` without completion is an incomplete attempt, not success. This list is live activity, not a stored evaluation cohort.
+
+`GET /tools` exposes `executable` for each definition: seven local adapters are executable and five destructive definitions are blocked. Ticket input now contains only `title` and `body`, with run ID in the envelope. Its output adds `lifecycle_state`, `policy_validation`, and `policy_version`; direct calls produce unreviewed candidates. See [Tool Registry](TOOL_REGISTRY.md) for authorization and transaction ownership.
 
 ### Investigate an alert
 
@@ -117,7 +124,7 @@ The response includes legacy `status` (`executed`, `blocked`, or `failed`), sema
 
 This ID identifies the seeded GPU alert. The response includes `agent_run_id`, `alert_id`, `steps`, `self_assessment`, and `final_recommendation`, with status `waiting_for_human` or `failed`.
 
-Retrieve `/agent/runs/{agent_run_id}` for persisted tool calls, error details, provider metadata, and approval status. A pending approval is a terminal review state; there is no API to resume execution.
+Retrieve `/agent/runs/{agent_run_id}` for persisted tool calls and authoritative `tool_attempts`, error details, provider metadata, and approval status. The final recommendation adds typed `proposed_actions`, `lifecycle_state`, `review_valid`, `policy_version` and `watchdog_decision`. A pending approval is a terminal review state; there is no API to resume execution.
 
 ### Evaluate a recommendation
 
@@ -141,7 +148,11 @@ Retrieve `/agent/runs/{agent_run_id}` for persisted tool calls, error details, p
 }
 ```
 
-Optional context fields also include `retrieved_context`, `tool_results`, `hypotheses`, `evidence_items`, `planned_tools`, and `blocked_tools`. The response contains `status`, `summary`, and `findings`. Decision values are `allow`, `allow_with_warnings`, `require_human_approval`, and `block`. These checks do not authorize infrastructure execution.
+For an actual action review, supply `agent_run_id` and `proposed_actions` with `action_id` (optional generated UUID), constrained `action_type`, optional `target`, `parameters`, `risk_level`, `requires_approval`, `supporting_evidence_ids` and `rationale`. Supported types are declared in [actions.py](../backend/app/agent/actions.py). Normalized equivalent type spellings resolve to the enum; unknown types and conflicting/duplicate action IDs return 422. Proposals nested in `final_recommendation.proposed_actions` are also validated.
+
+Optional context fields include `retrieved_context`, `tool_results`, `hypotheses`, `evidence_items`, `planned_tools`, and `blocked_tools`. Supplied evidence is not authoritative: the endpoint resolves the selected run's persisted source-node ledger and verified tool calls. A nonexistent run or unresolved/empty claim references causes `grounding_reference_integrity` findings. The example above intentionally lacks support and blocks; it is not a valid reviewed artifact.
+
+The response contains exact `verdict` (`allow`, `allow_with_warnings`, `require_human_approval`, or `block`), compatibility `status` with the same value, severity, `blocking`, `mandatory_review`, `reason`, `summary`, `policy_version`, finding IDs, affected action IDs, and typed findings. Findings expose ID/type, policy ID, severity, status, affected actions, blocking/review flags, reason, references and remediation. These are structural/pattern policy results, not semantic grounding or dispatch authorization. Standalone evaluation does not persist or promote any artifact.
 
 ### Run the security harness
 

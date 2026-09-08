@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.rag.trust import TrustLevel
+from app.agent.actions import ProposedAction, RecommendationState
 
 
 class AlertSummary(BaseModel):
@@ -59,6 +60,8 @@ class EvidenceItem(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     evidence_id: str
+    agent_run_id: UUID | None = None
+    observation_status: Literal["valid", "succeeded"] = "valid"
     kind: Literal["alert", "retrieval", "tool_output"]
     source_type: Literal["alert", "document", "tool"]
     alert_id: UUID | None = None
@@ -135,6 +138,11 @@ class AssessmentSnapshot(BaseModel):
 
 
 class FinalRecommendation(BaseModel):
+    proposed_actions: list[ProposedAction] = Field(default_factory=list)
+    lifecycle_state: RecommendationState = RecommendationState.CANDIDATE
+    review_valid: bool = False
+    policy_version: str | None = None
+    watchdog_decision: dict[str, Any] | None = None
     summary: str
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     citations: list[str] = Field(default_factory=list)

@@ -285,122 +285,150 @@ def get_tool(name: str) -> ToolDefinition:
     return tool
 
 
+def authorize_tool(definition: ToolDefinition, inputs: dict[str, Any], context: ToolExecutionContext) -> str | None:
+    """Application policy only; no user identity or approval/resume capability exists."""
+    from app.watchdog.policies import broad_scope
+    if definition.name in DANGEROUS_TOOL_NAMES or definition.is_destructive:
+        return "definition_blocked"
+    if definition.requires_human_approval:
+        return "approval_required"
+    if definition.handler is None:
+        return "handler_unavailable"
+    if any(broad_scope(value, key) for key, value in inputs.items() if key in {"node", "user", "target", "targets", "selector", "scope"}):
+        return "broad_target_denied"
+    if definition.name == "create_ticket_draft" and context.agent_run_id is None:
+        return "run_context_required"
+    return None
+
+
 def execute_tool(
     name: str,
-    input: dict[str, Any],
+    input: Any,
     session: Session,
     context: ToolExecutionContext,
 ) -> ToolExecutionResult:
-    definition = get_tool(name)
-    started_at = start_timer()
-    created_at = utcnow()
+    """Owns an independent tool/audit persistence boundary, never caller commits.
 
-    validated_input = definition.input_schema.model_validate(input)
-    input_payload = validated_input.model_dump(mode="json")
+    Orchestrators must commit run/step identities before dispatch. Requested and
+    invoked checkpoints are durable before dispatch; effects and success commit
+    together. A handler failure rolls back only its transaction, then finalizes
+    the already durable attempt. Handlers may flush but may not commit/rollback.
+    """
+    from pydantic import ValidationError
+    from app.models import AgentRun, AgentStep, ToolExecutionAudit
+    from app.tools.hygiene import snapshot
 
-    _observe_execution("attempt", definition, input_payload)
+    engine = session.get_bind()
+    timer = start_timer()
+    attempt = ToolExecutionAudit(agent_run_id=context.agent_run_id, step_id=context.step_id,
+        tool_name=name[:100], origin=context.invocation_source[:100], input_snapshot=snapshot(input))
+    with Session(engine) as audit_session:
+        audit_session.add(attempt)
+        audit_session.commit()
+        audit_session.refresh(attempt)
+        audit_id, requested_at = attempt.id, attempt.requested_at
+    definition = None
+    input_payload = {}
+    trust = TrustLevel.UNTRUSTED
 
-    if not definition.executable:
-        blocked_output_model = BlockedToolOutput.model_validate(
-            blocked_tool_handler(validated_input, session, context)
-        )
-        blocked_output = blocked_output_model.model_dump(mode="json")
-        duration_ms = elapsed_ms(started_at)
-        try:
-            record_dangerous_tool_attempt(
-                session,
-                tool_name=definition.name,
-                input_args=input_payload,
-                agent_run_id=context.agent_run_id,
-            )
-            tool_call = record_tool_call(
-                session,
-                agent_run_id=context.agent_run_id,
-                step_id=context.step_id,
-                tool_name=definition.name,
-                input_args=input_payload,
-                output=blocked_output,
-                trust_level=definition.trust_level,
-                status="blocked",
-                duration_ms=duration_ms,
-                error_message=None,
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
-
-        return ToolExecutionResult(
-            status="blocked",
-            tool_name=definition.name,
-            trust_level=definition.trust_level,
-            requires_human_approval=True,
-            output=blocked_output,
-            error=None,
-            created_at=created_at,
-            tool_call_id=tool_call.id if tool_call is not None else None,
-        )
+    def finish(outcome, *, code=None, message=None, output=None, invoked=False, diagnostic=None):
+        status = {"succeeded": "executed", "denied": "blocked", "failed": "failed"}[outcome]
+        with Session(engine) as final_session:
+            row = final_session.get(ToolExecutionAudit, audit_id)
+            row.outcome, row.completed_at = outcome, utcnow()
+            row.handler_invoked = invoked
+            row.output_snapshot = snapshot(output or {})
+            row.error_code, row.user_error = code, message
+            row.diagnostic = diagnostic or {}
+            final_session.add(row)
+            # Legacy ToolCall is an observation projection for known run contexts.
+            # It shares the authoritative attempt ID; standalone requests still
+            # retain the authoritative ToolExecutionAudit even without this row.
+            known_run = final_session.get(AgentRun, context.agent_run_id) if context.agent_run_id else None
+            valid_step = final_session.get(AgentStep, context.step_id) if context.step_id else None
+            if known_run and (context.step_id is None or (valid_step and valid_step.agent_run_id == known_run.id)):
+                call = record_tool_call(final_session, agent_run_id=known_run.id, step_id=context.step_id,
+                    tool_name=name[:100], input_args=input_payload or (input if isinstance(input, dict) else {}),
+                    output=output or {}, trust_level=trust, status=status, duration_ms=elapsed_ms(timer),
+                    error_message=message, tool_call_id=audit_id, handler_invoked=invoked,
+                    outcome=outcome, origin=context.invocation_source)
+                row.step_id = call.step_id
+                if code == "definition_blocked":
+                    record_dangerous_tool_attempt(final_session, tool_name=name, input_args=input_payload,
+                        agent_run_id=known_run.id)
+            final_session.commit()
+        return ToolExecutionResult(status=status, tool_name=name, trust_level=trust,
+            requires_human_approval=bool(definition and definition.requires_human_approval),
+            output=snapshot(output or {}), error=message, created_at=requested_at,
+            tool_call_id=audit_id, handler_invoked=invoked, error_code=code)
 
     try:
-        assert definition.handler is not None
-        _observe_execution("handler_invocation", definition, input_payload)
-        raw_output = definition.handler(validated_input, session, context)
-        validated_output = definition.output_schema.model_validate(raw_output)
-        output_payload = validated_output.model_dump(mode="json")
-        duration_ms = elapsed_ms(started_at)
-        tool_call = record_tool_call(
-            session,
-            agent_run_id=context.agent_run_id,
-            step_id=context.step_id,
-            tool_name=definition.name,
-            input_args=input_payload,
-            output=output_payload,
-            trust_level=definition.trust_level,
-            status="executed",
-            duration_ms=duration_ms,
-            error_message=None,
-        )
-        session.commit()
-        return ToolExecutionResult(
-            status="executed",
-            tool_name=definition.name,
-            trust_level=definition.trust_level,
-            requires_human_approval=definition.requires_human_approval,
-            output=output_payload,
-            error=None,
-            created_at=created_at,
-            tool_call_id=tool_call.id if tool_call is not None else None,
-        )
-    except Exception as exc:
-        session.rollback()
-        duration_ms = elapsed_ms(started_at)
-        error_message = str(exc)
-        tool_call_id = None
-        try:
-            tool_call = record_tool_call(
-                session,
-                agent_run_id=context.agent_run_id,
-                step_id=context.step_id,
-                tool_name=definition.name,
-                input_args=input_payload,
-                output={"error": error_message},
-                trust_level=definition.trust_level,
-                status="failed",
-                duration_ms=duration_ms,
-                error_message=error_message,
-            )
-            session.commit()
-            tool_call_id = tool_call.id if tool_call is not None else None
-        except Exception:
-            session.rollback()
+        definition = get_tool(name)
+        trust = definition.trust_level
+    except UnknownToolError as exc:
+        finish("denied", code="unknown_tool", message="Requested tool is not registered.")
+        exc.tool_call_id = audit_id
+        raise
+    try:
+        # The envelope alone owns run identity; legacy inner IDs cannot redirect it.
+        cleaned_input = {key: value for key, value in input.items() if key != "agent_run_id"} if isinstance(input, dict) else input
+        validated_input = definition.input_schema.model_validate(cleaned_input)
+        input_payload = validated_input.model_dump(mode="json")
+    except ValidationError as exc:
+        finish("denied", code="validation_error", message="Tool input failed validation.")
+        exc.tool_call_id = audit_id
+        raise
+    _observe_execution("attempt", definition, input_payload)
+    with Session(engine) as audit_session:
+        row = audit_session.get(ToolExecutionAudit, audit_id)
+        row.validated = True
+        row.outcome = "validated"
+        audit_session.add(row)
+        audit_session.commit()
+        run = audit_session.get(AgentRun, context.agent_run_id) if context.agent_run_id else None
+        step = audit_session.get(AgentStep, context.step_id) if context.step_id else None
+        invalid_context = (context.agent_run_id is not None and run is None) or (context.step_id is not None and (step is None or step.agent_run_id != context.agent_run_id))
+    denial = "invalid_run_context" if invalid_context else authorize_tool(definition, input_payload, context)
+    if denial:
+        return finish("denied", code=denial, message="Tool dispatch denied by application policy.",
+            output={"status": "blocked", "reason": denial, "requires_human_approval": definition.requires_human_approval})
 
-        return ToolExecutionResult(
-            status="failed",
-            tool_name=definition.name,
-            trust_level=definition.trust_level,
-            requires_human_approval=definition.requires_human_approval,
-            output={},
-            error=error_message,
-            created_at=created_at,
-            tool_call_id=tool_call_id,
-        )
+    # Persist invocation independently of both handler output and later exceptions.
+    with Session(engine) as audit_session:
+        row = audit_session.get(ToolExecutionAudit, audit_id)
+        row.validated_target = snapshot({key: value for key, value in input_payload.items() if key in {"node", "user", "target", "targets", "job"}})
+        row.handler_invoked, row.invoked_at, row.outcome = True, utcnow(), "invoked"
+        audit_session.add(row)
+        audit_session.commit()
+    _observe_execution("handler_invocation", definition, input_payload)
+    try:
+        with HandlerSession(engine) as execution_session:
+            raw_output = definition.handler(validated_input, execution_session, context)
+            validated_output = definition.output_schema.model_validate(raw_output)
+            output_payload = snapshot(validated_output.model_dump(mode="json"))
+            row = execution_session.get(ToolExecutionAudit, audit_id)
+            row.outcome, row.completed_at, row.output_snapshot = "succeeded", utcnow(), output_payload
+            execution_session.add(row)
+            if context.agent_run_id is not None:
+                call = record_tool_call(execution_session, agent_run_id=context.agent_run_id,
+                    step_id=context.step_id, tool_name=name, input_args=input_payload, output=output_payload,
+                    trust_level=trust, status="executed", duration_ms=elapsed_ms(timer), tool_call_id=audit_id,
+                    handler_invoked=True, outcome="succeeded", origin=context.invocation_source)
+                row.step_id = call.step_id
+            Session.commit(execution_session)
+        return ToolExecutionResult(status="executed", tool_name=name, trust_level=trust,
+            requires_human_approval=definition.requires_human_approval, output=output_payload,
+            error=None, created_at=requested_at, tool_call_id=audit_id, handler_invoked=True)
+    except Exception as exc:
+        # HandlerSession's context manager has already rolled back its effects.
+        return finish("failed", code="handler_error", message="Tool handler failed; no successful observation was produced.",
+            invoked=True, diagnostic={"exception_type": type(exc).__name__})
+
+
+class HandlerSession(Session):
+    """Handlers may add/flush; only the dispatcher finalizes their transaction."""
+    def commit(self):
+        raise RuntimeError("Tool handlers must not commit; the dispatcher owns this transaction.")
+
+    def rollback(self):
+        raise RuntimeError("Tool handlers must not roll back; raise to let the dispatcher roll back.")

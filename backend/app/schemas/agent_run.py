@@ -71,7 +71,15 @@ class AgentAssessmentResponse(SchemaModel):
     overridden_by_policy: bool = False
 
 
+from app.agent.actions import ProposedAction, RecommendationState
+
+
 class FinalRecommendationResponse(SchemaModel):
+    proposed_actions: list[ProposedAction] = Field(default_factory=list)
+    lifecycle_state: RecommendationState = RecommendationState.CANDIDATE
+    review_valid: bool = False
+    policy_version: str | None = None
+    watchdog_decision: dict[str, Any] | None = None
     summary: str
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     citations: list[str] = Field(default_factory=list)
@@ -122,6 +130,7 @@ class AgentRunDetailResponse(ExecutionProvenance):
     error_message: str | None = None
     steps: list[AgentStepResponse] = Field(default_factory=list)
     tool_calls: list[ToolCallRead] = Field(default_factory=list)
+    tool_attempts: list[dict[str, Any]] = Field(default_factory=list)
     self_assessment: AgentAssessmentResponse | None = None
     final_recommendation: FinalRecommendationResponse | None = None
 

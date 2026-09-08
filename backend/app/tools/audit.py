@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.models import AgentRun, AgentStep, SafetyEvent, ToolCall
 from app.models.base import utcnow
 from app.rag.injection import detect_prompt_injection
+from app.tools.hygiene import snapshot
 
 
 def start_timer() -> float:
@@ -84,6 +85,10 @@ def record_tool_call(
     status: str,
     duration_ms: int,
     error_message: str | None = None,
+    tool_call_id: UUID | None = None,
+    handler_invoked: bool | None = None,
+    outcome: str = "legacy_unknown",
+    origin: str = "legacy_unknown",
 ) -> ToolCall | None:
     if agent_run_id is None:
         return None
@@ -91,11 +96,13 @@ def record_tool_call(
     resolved_step_id = step_id or _resolve_step_id(session, agent_run_id)
     scan_result = scan_tool_output(output)
     tool_call = ToolCall(
+        **({"id": tool_call_id} if tool_call_id else {}),
+        handler_invoked=handler_invoked, outcome=outcome, origin=origin,
         agent_run_id=agent_run_id,
         step_id=resolved_step_id,
         tool_name=tool_name,
-        input_args=input_args,
-        output=output,
+        input_args=snapshot(input_args),
+        output=snapshot(output),
         trust_level=trust_level,
         duration_ms=duration_ms,
         status=status,
@@ -127,7 +134,7 @@ def record_dangerous_tool_attempt(
         affected_component=tool_name,
         details={
             "tool_name": tool_name,
-            "input": input_args,
+            "input": snapshot(input_args),
             "reason": "Dangerous infrastructure action requires human approval and is not executable by this tool registry.",
             "requires_human_approval": True,
             "recorded_at": utcnow().isoformat(),

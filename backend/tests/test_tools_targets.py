@@ -94,7 +94,7 @@ def test_execution_capability_is_enforced_before_calling_handler(seeded_client, 
     with Session(engine) as session:
         result = registry.execute_tool("search_logs", {"query": "xmrig"}, session, ToolExecutionContext())
     assert result.status == "blocked"
-    assert result.outcome == "blocked"
+    assert result.outcome == "denied"
     assert calls == []
 
 
@@ -103,7 +103,7 @@ def test_execution_capability_is_enforced_before_calling_handler(seeded_client, 
     [
         ("search_logs", {"query": "xmrig"}, "executed", "succeeded"),
         ("get_node_metrics", {"node": "missing-node"}, "failed", "failed"),
-        ("drain_node", {"node": "explicit-node"}, "blocked", "blocked"),
+        ("drain_node", {"node": "explicit-node"}, "blocked", "denied"),
     ],
 )
 def test_tool_outcome_points_to_exact_persisted_audit_call(
@@ -138,12 +138,15 @@ def test_tool_outcome_points_to_exact_persisted_audit_call(
     assert payloads[0]["tool_call_id"] != payloads[1]["tool_call_id"]
 
 
-def test_standalone_tool_call_does_not_claim_a_persisted_identity(seeded_client) -> None:
+def test_standalone_tool_call_has_a_persisted_attempt_identity(seeded_client) -> None:
     _, client = seeded_client
     response = client.post("/api/v1/tools/search_logs/execute", json={"input": {"query": "xmrig"}})
     assert response.status_code == 200
     assert response.json()["outcome"] == "succeeded"
-    assert response.json()["tool_call_id"] is None
+    assert response.json()["tool_call_id"] is not None
+    with Session(seeded_client[0]) as session:
+        from app.models import ToolExecutionAudit
+        assert session.get(ToolExecutionAudit, UUID(response.json()["tool_call_id"])).handler_invoked is True
 
 
 def test_invalid_adapter_output_returns_audited_failure(seeded_client, monkeypatch) -> None:
@@ -163,14 +166,15 @@ def test_invalid_adapter_output_returns_audited_failure(seeded_client, monkeypat
     assert payload["outcome"] == "failed"
     assert payload["output"] == {}
     assert payload["tool_call_id"] is not None
-    assert "SearchLogsOutput" in payload["error"]
+    assert payload["error_code"] == "handler_error"
+    assert payload["handler_invoked"] is True
     with Session(engine) as session:
         audit = session.get(ToolCall, UUID(payload["tool_call_id"]))
         assert audit is not None
         assert audit.agent_run_id == run_id
         assert audit.tool_name == "search_logs"
         assert audit.status == "failed"
-        assert audit.output == {"error": payload["error"]}
+        assert audit.output == {}
         assert audit.error_message == payload["error"]
 
 
@@ -189,8 +193,8 @@ def test_invalid_adapter_input_remains_422_and_never_invokes_handler(seeded_clie
         json={"input": {"query": ""}, "agent_run_id": str(demo_uuid("agent-run:gpu-abuse"))},
     )
     assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["query"]
-    assert response.json()["detail"][0]["type"] == "string_too_short"
+    assert response.json()["detail"]["errors"][0]["loc"] == ["query"]
+    assert response.json()["detail"]["errors"][0]["type"] == "string_too_short"
     assert calls == []
 
 

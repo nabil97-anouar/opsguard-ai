@@ -8,7 +8,7 @@ This document describes implemented controls and their limits.
 
 [execute_tool](../backend/app/tools/registry.py) accepts only registered tool names and validates input and output against Pydantic schemas. Current handlers read local fixtures or SQL data, retrieve document chunks, and create local ticket drafts. They do not run arbitrary shell commands or send tickets to an external system.
 
-The five disruptive definitions—`cancel_job`, `drain_node`, `block_user`, `isolate_node`, and `disable_service`—have no executable handler. The dispatcher returns a blocked result and creates a safety event. Supplying an approval field does not make them executable.
+The five disruptive definitions—`cancel_job`, `drain_node`, `block_user`, `isolate_node`, and `disable_service`—have no executable handler. The dispatcher records a denied attempt without handler invocation; run-associated destructive denials also create a safety event. Supplying an approval field does not make them executable.
 
 This restriction comes from registered capabilities and handlers, not a general-purpose sandbox. The dispatcher denies definitions that are destructive, require approval, or lack a handler. Registry usage descriptions are informational; there is no reviewer identity or approval-grant mechanism. See [Tool Registry](TOOL_REGISTRY.md).
 
@@ -28,9 +28,13 @@ The [injection scanner](../backend/app/rag/injection.py) matches known instructi
 
 A clean result means no configured pattern matched. Screening does not cover every input field or attack formulation, and flagged documents are not automatically quarantined.
 
-The [watchdog](../backend/app/watchdog/policies.py) checks dangerous actions, prompt-injection indicators, untrusted context, low confidence on severe alerts, weak grounding, broad operations, and suspicious tool output. Its decision is one of `allow`, `allow_with_warnings`, `require_human_approval`, or `block`.
+The [watchdog](../backend/app/watchdog/policies.py) checks structured action intent, reference integrity, prompt-injection indicators, untrusted context, low confidence on severe alerts, missing references, broad operations, and suspicious tool output. Its decision is one of `allow`, `allow_with_warnings`, `require_human_approval`, or `block`.
 
-These checks are heuristic. Text-based action checks have case and phrasing gaps, evidence discussion can trigger the same rules as proposed actions, and citation presence is not support verification. Watchdog results are review signals, not authorization to operate infrastructure.
+[ProposedAction](../backend/app/agent/actions.py) carries an action ID/type, target, parameters, risk label, approval requirement, supporting evidence IDs, and rationale. Action checks normalize Unicode, casing, whitespace and punctuation. Structured types, parameters, target counts, selectors and wildcard scopes drive decisions; proposal narrative and intent-bearing rationale receive supplemental screening. Retrieved evidence, tool observations and hypotheses are separate input fields and never become proposed actions merely by mentioning a command. Injection screening can still flag that content independently.
+
+`grounding_reference_integrity` requires same-run references to valid source observations, rejects missing/empty references, failed or blocked tool support, quarantine, and altered recommendation snapshots. The standalone API loads its authoritative evidence ledger from persisted source steps and successful tool-call records, ignoring caller-supplied evidence as authority. Internal workflow and harness callers supply their source ledgers explicitly. This is structural reference validation, not semantic entailment.
+
+Decisions expose exact `verdict`, severity, finding IDs/types, affected action IDs, `blocking`, `mandatory_review`, reason, and `policy_version: watchdog-policy-v3`. `status` remains an exact compatibility alias. Explicit action approval requirements produce review findings; disruptive intent blocks regardless of a caller's risk or approval label. These checks remain deterministic and incomplete for arbitrary language. A policy verdict does not authorize tool dispatch or infrastructure operation.
 
 The current reasoning layer is deterministic and does not interpret retrieved instructions as a language model would. Harness results for this implementation do not establish injection resistance for a future model provider.
 
@@ -38,13 +42,17 @@ The current reasoning layer is deterministic and does not interpret retrieved in
 
 [wait_for_human_approval](../backend/app/agent/nodes.py) ends every successful investigation with `waiting_for_human` and approval `pending`. There is no authenticated reviewer identity, approve/reject endpoint, or resumed execution path.
 
-Ticket drafts are written locally before watchdog evaluation and do not receive the later watchdog annotations. Review the final run status and findings with the draft. A failed run may retain earlier snapshots or candidate text; those records are not evidence of completed policy review.
+Recommendation generation persists `candidate`, `review_valid=false` and no ticket. The watchdog then records its decision and transitions the artifact to `pending_human_review` (policy checked, not human approved) or `blocked` (`review_valid=false`). Only then does the workflow create its local ticket with lifecycle, policy-validation and version fields. Blocked drafts remain traceable as blocked artifacts. Direct API ticket creation has no policy decision and produces a candidate marked `not_evaluated`. Provider-supplied validation labels cannot skip this lifecycle. Earlier candidate snapshots remain candidates if a later step fails.
 
 ## Audit coverage
 
 The application stores step snapshots, assessments, tool calls, and safety events in SQL. Run-associated tool calls include arguments, output, timing, status, and screening results.
 
-Coverage is incomplete: contextless tool calls lack `ToolCall` records, validation/unknown-tool failures are not comprehensively recorded, and ticket input can name a different run from its audit context. Commits occur at multiple stages, so partial investigation records can remain after failure. Audit rows are ordinary database records, not a tamper-evident log.
+Every request reaching the tool dispatcher or execution route creates `ToolExecutionAudit`, including contextless, unknown-tool, malformed-input, validation and policy denials. The outer execution context alone determines run ownership; an inner `agent_run_id` is ignored. Run-associated `ToolCall` projections share the authoritative attempt ID. `handler_invoked` and its timestamp are checkpointed before handler entry, independently of the final outcome; a failed outcome can therefore have `handler_invoked=true`.
+
+The dispatcher owns a separate persistence boundary. It commits requested/validated/invoked checkpoints, then commits handler effects and success together. On exceptions it rolls back handler effects and finalizes failure in a separate transaction. Handlers may flush but cannot commit/rollback their dispatcher session. Orchestration commits run/step identities before dispatch. Caller rollback does not erase a completed tool audit. A database outage or process crash can leave a requested/invoked attempt without completion; that is not reported as success.
+
+Snapshots are serializable, redacted for obvious credential keys/text, and bounded to 16 KiB each, with depth/item/string limits. Errors expose a generic user message and an internal exception-type diagnostic, not raw exception text. This is limited hygiene, not comprehensive secret classification. Existing historical records are not rewritten. Audit rows remain ordinary mutable SQL records, not a tamper-evident log.
 
 See [Data Model](DATA_MODEL.md) and [Tool Registry](TOOL_REGISTRY.md) for storage and association details.
 
@@ -60,6 +68,6 @@ The current runner requires no external model keys. Provider-related configurati
 
 ## Interpreting evaluation
 
-Security-harness outcomes show whether particular implemented checks fired for particular fixtures. Evaluation includes counters and heuristic scores; it is not a certification of application security or a scientific measurement of model reliability.
+Security-harness outcomes show whether particular implemented checks fired for particular fixtures. Evaluation includes cohort-scoped counts and explicitly defined rates; it is not a certification of application security or a scientific measurement of model reliability.
 
 See [Security Harness](SECURITY_HARNESS.md), [Evaluation](EVALUATION.md), and [API Reference](API_SPEC.md) for reproducible inputs, result semantics, and supported operations.

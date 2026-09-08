@@ -1,3 +1,4 @@
+import { recommendationLifecycle } from "@/lib/safety-status";
 import {
   Bot,
   Fingerprint,
@@ -171,6 +172,7 @@ export function AgentRunTrace({
       </div>
 
       <div className="mt-6 space-y-4">
+        {agentRun.final_recommendation ? <p className="mt-4 text-sm text-slate-200">{recommendationLifecycle(agentRun.final_recommendation.lifecycle_state)}</p> : null}
         {humanApprovalBanner(agentRun.final_recommendation)}
 
         {agentRun.final_recommendation ? (
