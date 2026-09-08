@@ -10,11 +10,11 @@ The frontend uses Next.js, React, TypeScript, and Tailwind CSS. It manages state
 
 ## Workflow
 
-1. Select **Seed sample data** to create the bundled alerts, documents, and related records. This button calls `POST /api/v1/demo/seed` with `reset: false`.
+1. Select **Seed sample data** to create bundled alerts, documents, and example history. Seeded agent and harness records are visibly labeled **Fixture / example — not executed**. This button calls `POST /api/v1/demo/seed` with `reset: false`.
 2. Select **Run scenario** for GPU abuse or prompt-injection poisoning. Each action upserts sample data, starts an investigation, and loads its recorded details when the request returns.
 3. Inspect the investigation trace, retrieval context, tool calls, and watchdog findings. Expand the JSON sections to see the stored step and tool payloads.
-4. Select **Run security harness** to run the bundled component and workflow scenarios. This action requests a reset of seeded records before execution.
-5. Select **Run evaluation** to calculate and store an aggregate summary. It can run the harness if results are absent. Open the Markdown or JSON report to inspect counts, scores, and limitations.
+4. Select **Run security harness** to run the bundled component and workflow scenarios. This action preserves existing records and requests `reset_demo_data: false`.
+5. Select **Run evaluation** to calculate and store a report for the displayed executed harness cohort. The request includes that harness execution ID. If the display contains only fixtures or unverified legacy records, the backend resolves an actual execution or runs the harness. Open the Markdown or JSON report to inspect this exact evaluation; both export links are pinned to its evaluation ID.
 
 Completed investigations end with `waiting_for_human`. This is a terminal review handoff. Approval, rejection, workflow resumption, and infrastructure execution controls are not implemented; review and any subsequent operational action happen outside this application.
 
@@ -27,12 +27,12 @@ Completed investigations end with `waiting_for_human`. This is a terminal review
 | Agent scenarios | Launch controls for the two bundled investigations. |
 | Scenario catalog | Static descriptions and labels for four sample incidents. These labels describe fixtures rather than current alert state. |
 | Documents, tools, and policies | A preview of documents and policies, plus separate labeled lists for executable adapters and blocked action definitions. |
-| Agent run trace | Run identifiers and status, recommendation summary, ordered steps, durations, and expandable input/output snapshots. Assessment details and missing evidence are available in the recorded JSON. |
+| Agent run trace | Executed/fixture/unknown provenance, run identifiers and status, recommendation summary, ordered steps, durations, and expandable input/output snapshots. Assessment details and missing evidence are available in the recorded JSON. |
 | RAG citations | Persisted excerpts, source/document/chunk/evidence IDs, observation times, trust labels, retrieval scores, citations, and pattern-scan findings. |
 | Tool calls | Exact call IDs, recorded tool names, outcomes, trust labels, scan results, input arguments, and outputs. Failed and blocked attempts are not supporting observations. |
 | Watchdog findings | Policy verdict, reasons, remediation text, reference identifiers, and finding metadata. A verdict does not authorize infrastructure execution. |
-| Security harness | Passed, partial, and failed counts; expected and observed behavior; findings, safety events, and result metadata. |
-| Evaluation and reports | Aggregate engineering indicators, activity counts, summary text, and report links. |
+| Security harness | Record-group ID; per-result executed/fixture/legacy provenance, scenario version and test level; recorded pass/fail and legacy partial counts; observed mandatory invariant checks and failures; expected and observed behavior; findings and metadata. Fixture passes never populate the executed pass-count indicator. |
+| Evaluation and reports | Stored report versus live preview; evaluation and harness IDs; execution timestamps, expected/completed case counts, scenario/test-level breakdown, provider/policy/metric-definition versions; each metric’s numerator, denominator, value and definition; failures, limitations, and pinned report links. |
 
 ## Interpreting evidence and evaluation
 
@@ -40,7 +40,9 @@ Retrieval scores measure lexical matches. A citation identifies retrieved materi
 
 The dashboard reads canonical evidence from the displayed run's recommendation. Older runs may display their own validated `retrieve_context` step snapshots. It never issues fresh retrieval while loading a run. An explicit empty evidence set stays empty, and absent historical evidence has an explicit empty state. Editing current documents does not change the stored content or trust shown for an earlier run.
 
-Confidence and aggregate evaluation scores are deterministic engineering heuristics. They are not calibrated probabilities, semantic correctness measurements, or estimates of resistance to arbitrary attacks. Evaluation score badges are display summaries; watchdog findings contain the actual policy verdicts. Report endpoints prefer the latest saved evaluation; run evaluation to refresh it from recorded activity.
+Investigation confidence remains a deterministic heuristic. Evaluation has no aggregate scorecard. Rates show raw numerators and denominators; zero-denominator metrics display **N/A — no applicable observations**. Human-review rates describe terminal workflow behavior, not escalation accuracy or approval usefulness. Adversarial cases describe application-level invariant preservation under fixture inputs, not model-level prompt-injection resistance.
+
+The dashboard shows the latest stored evaluation separately from recent activity. Stored reports do not change when an unrelated investigation runs. Without a stored evaluation, the backend returns a clearly labeled live preview; export links appear only for a stored evaluation. The exact cohort JSON preserves scenario versions, workflow run IDs, and component run IDs. New harness executions use pass/fail. A legacy partial record is displayed as historical and is never presented as proof that mandatory invariants passed.
 
 See [Evaluation](EVALUATION.md), [RAG Design](RAG_DESIGN.md), and [Security Boundaries](SECURITY_BOUNDARIES.md) for the implemented calculations and controls.
 
@@ -48,7 +50,7 @@ See [Evaluation](EVALUATION.md), [RAG Design](RAG_DESIGN.md), and [Security Boun
 
 - Initial loading retrieves reference data, the latest available investigation, recent harness activity, and an evaluation summary. Refreshes are driven by explicit actions; there is no polling or streamed step progress.
 - The dashboard has no alert editor, document uploader, investigation-history selector, or separate approval page.
-- Independent action controls can overlap. Run mutations sequentially, especially when the harness resets sample records. Refresh the page if displayed records no longer match the current backend state.
+- Independent action controls can overlap. Run mutations sequentially so the displayed execution and evaluation remain easy to track. Refresh the page if displayed records no longer match the current backend state.
 - Some refresh failures are reduced to a single message or not surfaced by action handlers. Raw step records and API responses remain useful when investigating inconsistent displays.
 - Status badges use exact mappings: untrusted content and approval/warning decisions receive warning treatment, quarantined content and blocked decisions receive critical treatment, and unknown labels remain neutral. Color does not grant execution authority.
 
@@ -68,4 +70,4 @@ npm run typecheck
 npm run build
 ```
 
-The Node test suite covers the production historical loader, snapshot selection, exact badge mappings, and server-rendered tool grouping. It uses the existing TypeScript compiler and creates temporary build artifacts without adding dependencies. There is no browser automation suite or general runtime validation of every API response.
+The Node test suite covers the production historical loader, snapshot selection, exact badge mappings, server-rendered tool grouping, fixture/executed provenance in harness and agent traces, test levels, invariant failures, exact metric counts and zero denominators, pinned report exports, and explicit-cohort API requests. It uses the existing TypeScript compiler and creates temporary build artifacts without adding dependencies. There is no browser automation suite or general runtime validation of every API response.

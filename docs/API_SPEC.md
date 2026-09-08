@@ -36,11 +36,11 @@ All paths below are relative to `/api/v1`.
 | POST | `/harness/run` | Run all or selected scenarios and persist results |
 | GET | `/harness/results` | Most recent 50 scenario results |
 | GET | `/harness/results/{harness_run_id}` | Aggregate and individual results for a harness run |
-| POST | `/evaluation/run` | Calculate an evaluation and attempt to store its summary |
-| GET | `/evaluation/summary` | Latest stored summary, or a calculation if none is available |
-| GET | `/evaluation/report.md` | Evaluation report as `text/markdown` |
-| GET | `/evaluation/report.json` | Structured evaluation report |
-| GET | `/evaluation/scores` | Most recent 20 stored evaluation rows |
+| POST | `/evaluation/run` | Evaluate a completed executed harness cohort and store a new snapshot |
+| GET | `/evaluation/summary` | Latest stored current-format summary, or labeled live preview of the latest eligible execution |
+| GET | `/evaluation/report.md` | Stored report as `text/markdown`; optional `evaluation_run_id` query |
+| GET | `/evaluation/report.json` | Same stored report as JSON; optional `evaluation_run_id` query |
+| GET | `/evaluation/scores` | Report-history envelopes with origin/report-kind labels |
 
 The list endpoints above do not expose configurable pagination. There are no alert CRUD, approval/rejection, feedback submission, ticket export, or per-incident report endpoints.
 
@@ -151,21 +151,25 @@ Optional context fields also include `retrieved_context`, `tool_results`, `hypot
 {"scenario_ids": null, "reset_demo_data": false}
 ```
 
-`scenario_ids=null` selects all scenarios; a list selects named scenarios from `GET /harness/scenarios`. `reset_demo_data` defaults to `true`; this example preserves existing fixture records where possible. The harness still seeds data and writes investigation/results records.
+`scenario_ids=null` selects all scenarios; a list selects named scenarios from `GET /harness/scenarios`. `reset_demo_data` defaults to `false`. The harness still seeds input data and writes execution/result records. Fixture history has `fixture` provenance; newly observed outcomes have `executed` provenance. Existing unidentified results are `legacy_unknown`.
 
-The response has status `completed`, a `harness_run_id`, aggregate `total`, `passed`, `failed`, `partial` counts, and individual `results`.
+The response includes execution `status`, `harness_run_id`, provenance, start/end timestamps, expected/completed case counts, provider/policy versions, scenario manifest, aggregate `total`, `passed`, `failed`, `partial` counts, and individual `results`. New executions are binary pass/fail; `partial` remains for reading historical records. Each result identifies test level, scenario version, explicit expectations, observations, mandatory invariants/failures, and required/reached human review.
+
+Reading a fixture group without a manifest returns `status: not_executed`; an unidentified legacy group returns `status: legacy_unknown`. Their completed execution count is zero and expected count is null. Stored row totals do not establish scenario completion.
 
 ### Generate an evaluation
 
 `POST /evaluation/run`:
 
 ```json
-{"run_harness_if_empty": false, "report_type": "full"}
+{"harness_run_id": "REPLACE_WITH_EXECUTED_HARNESS_UUID", "run_harness_if_empty": false, "report_type": "full"}
 ```
 
-The response includes `persisted`, nullable `evaluation_score_id`, `summary`, and `scorecard`. If `run_harness_if_empty=true` (the default) and no harness rows exist, evaluation runs the harness with fixture reset enabled. `report_type` is a stored label, not a selector for different execution pipelines.
+The response includes `persisted`, `evaluation_run_id`, and `summary`. The summary identifies its `report_kind`, metric-definition version, exact `cohort`, scenario snapshots, failed cases, mandatory-invariant failures, and limitations. `metrics` is a dictionary of `{numerator, denominator, value, unit, definition}` objects; a zero denominator gives `value:null`. There is no scorecard or overall safety score.
 
-The report GET endpoints resolve the latest stored summary when available, so request a new evaluation to refresh a saved report. Reports contain deterministic engineering metrics, not a scientific assessment of model capability.
+Omit `harness_run_id` to select the latest completed executed manifest. If none exists and `run_harness_if_empty=true` (the default), evaluation executes the harness. Seeded fixture rows cannot prevent that execution; an explicitly selected fixture/non-execution is rejected. `report_type` remains a descriptive label.
+
+Use `?evaluation_run_id=UUID` on both report exports to select the same stored snapshot. Later unrelated activity does not change it. Without an ID, GET endpoints return the latest current report or an explicitly labeled live preview of the latest eligible execution (empty if none exists). Historical `/evaluation/scores` envelopes label old payloads `legacy_archive` with `legacy_unknown` provenance and do not turn them into current executed reports. See [Evaluation](EVALUATION.md) for exact metric definitions and compatibility details.
 
 ## Errors and schema sources
 

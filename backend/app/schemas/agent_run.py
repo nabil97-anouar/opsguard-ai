@@ -10,7 +10,14 @@ from app.schemas.common import CreatedAtSchema, IDSchema, SchemaModel
 from app.schemas.tools import ToolCallRead
 
 
-class AgentRunBase(SchemaModel):
+class ExecutionProvenance(SchemaModel):
+    provenance: str = "legacy_unknown"
+    execution_kind: str = "unknown"
+    provider_version: str | None = None
+    policy_version: str | None = None
+
+
+class AgentRunBase(ExecutionProvenance):
     alert_id: UUID
     status: str
     llm_provider: str
@@ -92,7 +99,7 @@ class AgentStepResponse(SchemaModel):
     created_at: datetime
 
 
-class AgentRunResponse(SchemaModel):
+class AgentRunResponse(ExecutionProvenance):
     status: Literal["waiting_for_human", "failed"]
     agent_run_id: UUID
     alert_id: UUID
@@ -101,7 +108,7 @@ class AgentRunResponse(SchemaModel):
     final_recommendation: FinalRecommendationResponse | None = None
 
 
-class AgentRunDetailResponse(SchemaModel):
+class AgentRunDetailResponse(ExecutionProvenance):
     agent_run_id: UUID
     alert_id: UUID
     status: str
@@ -119,7 +126,7 @@ class AgentRunDetailResponse(SchemaModel):
     final_recommendation: FinalRecommendationResponse | None = None
 
 
-class AgentRunListItem(SchemaModel):
+class AgentRunListItem(ExecutionProvenance):
     agent_run_id: UUID
     alert_id: UUID
     status: str

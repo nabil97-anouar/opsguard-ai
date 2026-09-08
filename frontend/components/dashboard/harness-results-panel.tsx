@@ -1,6 +1,7 @@
 import { CheckCircle2, FlaskConical, Link2, ShieldBan, TriangleAlert } from "lucide-react";
 
 import { JsonInspector } from "@/components/dashboard/json-inspector";
+import { ProvenanceLabel } from "@/components/dashboard/provenance-label";
 import { SafetyBadge } from "@/components/dashboard/safety-badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { HarnessRunResponse, HarnessScenarioResponse } from "@/lib/types";
@@ -10,10 +11,6 @@ type HarnessResultsPanelProps = {
   scenarios: HarnessScenarioResponse[];
   isLoading: boolean;
 };
-
-function scoreLabel(score: number): string {
-  return `${Math.round(score * 100)}%`;
-}
 
 export function HarnessResultsPanel({
   harnessRun,
@@ -29,9 +26,10 @@ export function HarnessResultsPanel({
           </p>
           <CardTitle className="mt-3">Adversarial regression scenarios</CardTitle>
           <CardDescription className="mt-3">
-            The harness checks prompt injection, malicious tool feedback,
-            blocked tool requests, and citation gaps in selected components and workflows.
-            Results describe these cases, not general model security.
+            Executed cases observe input-pattern detection, trust boundaries, tool
+            policies, and workflow invariants. Fixture records are examples, not
+            executed tests. These deterministic cases do not measure model-level
+            prompt-injection resistance.
           </CardDescription>
         </div>
 
@@ -41,18 +39,28 @@ export function HarnessResultsPanel({
         </div>
       </div>
 
+      {harnessRun ? (
+        <div className="mt-5 space-y-3 text-sm text-slate-300">
+          <ProvenanceLabel provenance={harnessRun.provenance} />
+          <p className="break-all font-mono text-xs">Harness record group ID: {harnessRun.harness_run_id}</p>
+          <p>Completed / expected scenarios: {harnessRun.completed_case_count} / {harnessRun.expected_case_count ?? "unknown"}</p>
+          <p>Execution started: {harnessRun.started_at ?? "Not recorded"} · completed: {harnessRun.completed_at ?? "Not recorded"}</p>
+          <p>Provider / reasoner: {harnessRun.provider_version ?? "Not recorded"} · policy / watchdog: {harnessRun.policy_version ?? "Not recorded"}</p>
+        </div>
+      ) : null}
+
       <div className="mt-8 grid gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-white/8 bg-ink/60 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-            Total
+            Stored records
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
-            {harnessRun?.total ?? scenarios.length}
+            {harnessRun?.total ?? 0}
           </p>
         </div>
         <div className="rounded-2xl border border-success/20 bg-success/10 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-green-100">
-            Passed
+            Recorded passed
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {harnessRun?.passed ?? 0}
@@ -60,7 +68,7 @@ export function HarnessResultsPanel({
         </div>
         <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-amber-100">
-            Partial
+            Legacy partial
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {harnessRun?.partial ?? 0}
@@ -68,7 +76,7 @@ export function HarnessResultsPanel({
         </div>
         <div className="rounded-2xl border border-critical/20 bg-critical/10 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-red-100">
-            Failed
+            Recorded failed
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {harnessRun?.failed ?? 0}
@@ -93,6 +101,13 @@ export function HarnessResultsPanel({
             className="rounded-2xl border border-white/8 bg-ink/60 p-5"
             key={result.harness_result_id ?? result.scenario_id}
           >
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <ProvenanceLabel provenance={result.provenance} />
+              <SafetyBadge value={`test level: ${result.test_level ?? "unknown"}`} />
+              <span className="font-mono text-xs text-slate-400">
+                {result.scenario_id} · version {result.scenario_version ?? "unknown"}
+              </span>
+            </div>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
                 <div className="flex items-center gap-3">
@@ -119,7 +134,6 @@ export function HarnessResultsPanel({
                 {result.watchdog_status ? (
                   <SafetyBadge value={result.watchdog_status} />
                 ) : null}
-                <SafetyBadge value={scoreLabel(result.score)} />
               </div>
             </div>
 
@@ -135,7 +149,7 @@ export function HarnessResultsPanel({
 
               <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                  Safety evidence
+                  Recorded observations
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-200">
                   {result.safety_events.length} linked safety events ·{" "}
@@ -154,15 +168,50 @@ export function HarnessResultsPanel({
                   Failure reason
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-200">
-                  {result.failure_reason ?? "No failure reason. Scenario met its expected bar."}
+                  {result.failure_reason ?? "No failure reason recorded."}
                 </p>
               </div>
             </div>
+
+            <section className="mt-4 rounded-2xl border border-white/10 p-4" aria-label="Mandatory invariants">
+              <p className="text-sm font-medium text-white">Mandatory invariants</p>
+              {result.invariant_failures?.length ? (
+                <ul className="mt-2 list-inside list-disc text-sm text-red-100">
+                  {result.invariant_failures.map((failure) => <li key={failure}>Failed: {failure}</li>)}
+                </ul>
+              ) : null}
+              {Object.keys(result.mandatory_invariants ?? {}).length ? (
+                <ul className="mt-2 list-inside list-disc text-sm text-slate-300">
+                  {Object.entries(result.mandatory_invariants).map(([name, passed]) => (
+                    <li key={name}>{name}: {passed ? "passed" : "failed"}</li>
+                  ))}
+                </ul>
+              ) : <p className="mt-2 text-sm text-slate-300">No observed mandatory-invariant checks recorded.</p>}
+              {result.status === "partial" ? (
+                <p className="mt-2 text-sm text-amber-100">Legacy partial result. Current executions use pass/fail; this is not proof that mandatory invariants passed.</p>
+              ) : null}
+            </section>
+
+            {result.human_review_required !== null && result.human_review_required !== undefined ? (
+              <p className="mt-4 text-sm text-slate-300">
+                Human review required: {String(result.human_review_required)} · reached: {result.human_review_reached === null ? "Not observed" : String(result.human_review_reached)} · terminal status: {result.terminal_status ?? "Not recorded"}
+              </p>
+            ) : null}
 
             <div className="mt-4 grid gap-3">
               <JsonInspector
                 data={{
                   scenario_id: result.scenario_id,
+                  scenario_version: result.scenario_version,
+                  test_level: result.test_level,
+                  provenance: result.provenance,
+                  harness_run_id: result.harness_run_id,
+                  harness_result_id: result.harness_result_id,
+                  created_at: result.created_at,
+                  mandatory_invariants: result.mandatory_invariants,
+                  invariant_failures: result.invariant_failures,
+                  expectations: result.expectations,
+                  observations: result.observations,
                   safety_events: result.safety_events,
                   findings: result.findings,
                   metadata: result.metadata
@@ -184,6 +233,11 @@ export function HarnessResultsPanel({
                 {scenarios.length} deterministic harness scenarios are available
                 for replay against the local stack.
               </p>
+              <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                {scenarios.map((scenario) => <li key={scenario.scenario_id}>
+                  {scenario.scenario_id} · {scenario.test_level} · version {scenario.scenario_version}
+                </li>)}
+              </ul>
             </div>
           </div>
         </div>

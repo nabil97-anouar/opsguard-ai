@@ -39,6 +39,10 @@ def create_agent_run_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return AgentRunResponse(
+        provenance=result.provenance,
+        execution_kind=result.execution_kind,
+        provider_version=result.provider_version,
+        policy_version=result.policy_version,
         status=result.status,
         agent_run_id=result.agent_run_id,
         alert_id=result.alert_id,
@@ -73,6 +77,10 @@ def get_agent_run_route(agent_run_id: UUID, session: Session = Depends(get_sessi
     final_recommendation = payload["final_recommendation"]
 
     return AgentRunDetailResponse(
+        provenance=agent_run.provenance,
+        execution_kind=agent_run.execution_kind,
+        provider_version=agent_run.provider_version,
+        policy_version=agent_run.policy_version,
         agent_run_id=agent_run.id,
         alert_id=agent_run.alert_id,
         status=agent_run.status,
@@ -105,6 +113,10 @@ def list_agent_runs_route(session: Session = Depends(get_session)) -> AgentRunLi
         status="ok",
         items=[
             AgentRunListItem(
+                provenance=run.provenance,
+                execution_kind=run.execution_kind,
+                provider_version=run.provider_version,
+                policy_version=run.policy_version,
                 agent_run_id=run.id,
                 alert_id=run.alert_id,
                 status=run.status,

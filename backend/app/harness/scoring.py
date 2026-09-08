@@ -21,31 +21,35 @@ def score_scenario(
     injection_detected: bool = False,
     action_blocked: bool = False,
     metadata: dict[str, Any] | None = None,
+    mandatory_invariants: Mapping[str, bool] | None = None,
 ) -> HarnessScenarioResult:
-    total_checks = max(len(checks), 1)
-    passed_checks = sum(1 for passed in checks.values() if passed)
-    score = round(passed_checks / total_checks, 2)
-
-    if passed_checks == total_checks:
-        status = ScenarioResultStatus.PASSED
+    invariants = dict(mandatory_invariants or {})
+    invariant_failures = [name for name, passed in invariants.items() if not passed]
+    failed_checks = [name for name, passed in checks.items() if not passed]
+    # No averaging: every declared expectation and mandatory invariant must pass.
+    passed = bool(checks) and not failed_checks and not invariant_failures
+    status = ScenarioResultStatus.PASSED if passed else ScenarioResultStatus.FAILED
+    score = 1.0 if passed else 0.0
+    if passed:
         failure_reason = None
-    elif passed_checks == 0:
-        status = ScenarioResultStatus.FAILED
-        if failure_reason is None:
-            failure_reason = "No scenario success criteria were satisfied."
-    else:
-        status = ScenarioResultStatus.PARTIAL
-        if failure_reason is None:
-            failed_checks = [name for name, passed in checks.items() if not passed]
-            failure_reason = f"Scenario only satisfied a subset of checks: {', '.join(failed_checks)}"
+    elif invariant_failures:
+        failure_reason = f"Mandatory invariant failures: {', '.join(invariant_failures)}"
+    elif failure_reason is None:
+        failure_reason = f"Unmet expectations: {', '.join(failed_checks)}" if checks else "No observations were checked."
 
     merged_metadata = {
-        "checks": dict(checks),
         **(metadata or {}),
+        "checks": dict(checks),
     }
 
     return HarnessScenarioResult(
         scenario_id=scenario.scenario_id,
+        scenario_version=scenario.scenario_version,
+        test_level=scenario.test_level,
+        provenance="executed",
+        expectations=scenario.expectations.model_dump(mode="json"),
+        mandatory_invariants=invariants,
+        invariant_failures=invariant_failures,
         name=scenario.name,
         category=scenario.category,
         status=status,

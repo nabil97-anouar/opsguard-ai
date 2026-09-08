@@ -24,9 +24,12 @@ flowchart TD
     Harness --> Tools
     Harness --> Watchdog
     Harness --> SQL
-    API --> Evaluation[Evaluation aggregation]
+    Harness --> Cohort[Versioned execution manifest]
+    API --> Evaluation[Explicit cohort evaluation]
+    Cohort --> Evaluation
     SQL --> Evaluation
-    Evaluation --> Reports[Markdown and JSON reports]
+    Evaluation --> Snapshot[Stored evaluation snapshot]
+    Snapshot --> Reports[Markdown and JSON reports]
 ```
 
 The diagram shows active application components. Qdrant is present in Compose but has no role in ingestion or retrieval.
@@ -41,7 +44,7 @@ The diagram shows active application components. Qdrant is present in Compose bu
 | Tools | Immutable typed registry, local handlers, and run-linked audit records in [app/tools](../backend/app/tools) |
 | Watchdog | Seven deterministic policies and decision aggregation in [app/watchdog](../backend/app/watchdog) |
 | Harness | Python scenario definitions, execution, scoring, and persistence in [app/harness](../backend/app/harness) |
-| Evaluation | Database aggregation, summary storage, and report rendering in [app/evaluation](../backend/app/evaluation) |
+| Evaluation | Explicit executed cohorts, raw metric counts, immutable report snapshots, and report rendering in [app/evaluation](../backend/app/evaluation) |
 | Persistence | SQLModel tables and SQLAlchemy sessions in [app/models](../backend/app/models) and [app/db](../backend/app/db) |
 
 ## An investigation
@@ -74,9 +77,11 @@ See [Retrieval and Evidence](RAG_DESIGN.md), [Tool Registry](TOOL_REGISTRY.md), 
 
 ## Evaluation and storage
 
-The harness combines an end-to-end investigation case with direct tool and policy tests. It stores scenario outcomes and supporting records. Evaluation aggregates stored runs, tool calls, findings, and harness results into a scorecard and reports. These measure implemented checks and recorded behavior; they do not establish real-model robustness or calibrated reasoning quality.
+The harness combines one end-to-end investigation case, two component cases, five policy cases, and one tool-boundary case. It first stores a versioned execution manifest, then records observed case outcomes and mandatory assertions. New results use strict pass/fail; historical partial results remain labeled as historical. Prewritten seeded results have fixture provenance and cannot satisfy an execution requirement.
 
-PostgreSQL is the default database. SQLite is available through an explicit `DATABASE_URL`; there is no automatic failover. SQL tables store document content and execution records, with JSON snapshots for nested state. Table creation uses `create_all`, without a schema-migration framework.
+Evaluation selects a completed executed manifest and follows its exact workflow/component run relationships. It stores the cohort, scenario definitions/versions, provider/policy versions, case observations, and each metric's numerator, denominator, value, and definition in a separate report snapshot. Human-review and evidence metrics include only actual end-to-end workflows. JSON and Markdown exports render the selected snapshot without recomputing from global history. These outputs describe application assertions and recorded identities; they do not establish real-model robustness, semantic correctness, or calibration. There is no overall safety score.
+
+PostgreSQL is the default database. SQLite is available through an explicit `DATABASE_URL`; there is no automatic failover. SQL tables store document content and execution records, with JSON snapshots for nested state. Additive compatibility initialization creates missing tables and provenance fields without a schema-migration framework. Legacy evaluation JSON is retained as labeled history; unidentified old executions are not upgraded into benchmark evidence.
 
 [Data Model](DATA_MODEL.md), [Security Harness](SECURITY_HARNESS.md), and [Evaluation](EVALUATION.md) describe these components in detail.
 

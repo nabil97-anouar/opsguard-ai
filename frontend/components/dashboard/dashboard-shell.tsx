@@ -57,7 +57,7 @@ import {
   type ToolListItem,
   type WatchdogPolicyItem,
 } from "@/lib/types";
-import { loadRecordedAgentRun, recordedRetrievalChunks, toolRegistryGroups } from "@/lib/dashboard-data";
+import { executedHarnessRunId, executionProvenanceLabel, harnessExecutionCounts, loadRecordedAgentRun, recordedRetrievalChunks, toolRegistryGroups } from "@/lib/dashboard-data";
 
 type ScenarioKind = "gpu" | "prompt";
 
@@ -133,14 +133,6 @@ function formatTimestamp(value: string | null | undefined): string {
   }
 
   return new Date(value).toLocaleString();
-}
-
-function harnessPassRate(harnessRun: HarnessRunResponse | null): string {
-  if (!harnessRun || harnessRun.total === 0) {
-    return "--";
-  }
-
-  return `${Math.round((harnessRun.passed / harnessRun.total) * 100)}%`;
 }
 
 export function DashboardShell() {
@@ -373,14 +365,14 @@ export function DashboardShell() {
     setStatusMessage("Running the local security harness against its configured components and workflow scenarios…");
 
     try {
-      const response = await runSecurityHarness(null, true);
+      const response = await runSecurityHarness(null, false);
       setHarnessRun(response);
       await Promise.all([loadReferenceData(), loadEvaluationSnapshot()]);
       if (!agentRun) {
         await loadLatestAgentActivity();
       }
       setStatusMessage(
-        `Security harness completed: ${response.passed} passed, ${response.partial} partial, ${response.failed} failed.`
+        `Security harness ${response.harness_run_id} completed: ${response.passed} passed, ${response.failed} failed.`
       );
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -392,14 +384,14 @@ export function DashboardShell() {
   async function handleRunEvaluation(): Promise<void> {
     setIsRunningEvaluation(true);
     setErrorMessage(null);
-    setStatusMessage("Calculating the deterministic evaluation summary and refreshing exportable reports…");
+    setStatusMessage("Evaluating the selected execution cohort and storing its report…");
 
     try {
-      const response = await runEvaluation(true, "full");
+      const response = await runEvaluation(true, "full", executedHarnessRunId(harnessRun));
       setEvaluationSummary(response.summary);
       await loadLatestHarnessActivity();
       setStatusMessage(
-        `Evaluation ready. Aggregate indicator ${response.scorecard.overall_score.toFixed(1)} with ${response.summary.harness_performance.total_scenarios} harness scenarios in scope.`
+        `Evaluation ${response.evaluation_run_id} stored for harness ${response.summary.cohort.harness_run_id}: ${response.summary.cohort.completed_case_count} / ${response.summary.cohort.expected_case_count} scenarios completed.`
       );
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -468,7 +460,7 @@ export function DashboardShell() {
               </p>
               <p className="mt-3 text-sm leading-6 text-slate-200">
                 {latestHarnessRunId(harnessRun)
-                  ? `Run ${latestHarnessRunId(harnessRun)} captured ${harnessRun?.total ?? 0} adversarial scenarios.`
+                  ? `Record group ${latestHarnessRunId(harnessRun)}: ${executionProvenanceLabel(harnessRun?.provenance)}. ${harnessRun?.total ?? 0} scenario records.`
                   : "Run the bundled security harness to record scenario outcomes."}
               </p>
             </div>
@@ -524,11 +516,11 @@ export function DashboardShell() {
           value={String(agentRun?.tool_calls.length ?? 0)}
         />
         <MetricCard
-          change={`${harnessScenarios.length} deterministic adversarial scenarios are available locally.`}
+          change="Passed / completed records in the displayed executed cohort. Fixtures do not count."
           icon={FlaskConical}
-          label="Harness pass rate"
-          tone={harnessRun && harnessRun.failed === 0 ? "success" : "warning"}
-          value={harnessPassRate(harnessRun)}
+          label="Executed scenario passes"
+          tone={executedHarnessRunId(harnessRun) && harnessRun?.failed === 0 ? "success" : "warning"}
+          value={harnessExecutionCounts(harnessRun)}
         />
       </section>
 
@@ -773,8 +765,8 @@ export function DashboardShell() {
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">
             Run the bundled scenarios to inspect component and workflow behavior.
-            Export aggregate evaluation reports with counts, engineering indicators,
-            and the limitations of the current evaluation.
+            Export stored cohort reports with execution IDs, versioned scenario
+            expectations, raw metric counts, and evaluation limitations.
           </p>
         </Card>
       </section>

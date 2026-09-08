@@ -1,4 +1,24 @@
-import type { AgentRunDetailResponse, EvidenceItem, RetrievalChunk, ToolListItem } from "./types";
+import type { AgentRunDetailResponse, EvidenceItem, HarnessRunResponse, RetrievalChunk, ToolListItem } from "./types";
+
+export function executionProvenanceLabel(provenance: string | null | undefined): string {
+  if (provenance === "executed") return "Executed";
+  if (provenance === "fixture") return "Fixture / example — not executed";
+  return "Legacy / unknown provenance — execution unverified";
+}
+
+export function executedHarnessRunId(run: HarnessRunResponse | null): string | null {
+  return run && run.status === "completed" && run.provenance === "executed" && run.results.length > 0 && run.results.every((result) => result.provenance === "executed")
+    ? run.harness_run_id : null;
+}
+
+export function harnessExecutionCounts(run: HarnessRunResponse | null): string {
+  if (!executedHarnessRunId(run) || !run || run.total === 0) return "Not executed";
+  return `${run.passed} / ${run.total}`;
+}
+
+export function evaluationReportPath(format: "md" | "json", evaluationRunId: string): string {
+  return `/evaluation/report.${format}?evaluation_run_id=${encodeURIComponent(evaluationRunId)}`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

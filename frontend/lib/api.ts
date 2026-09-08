@@ -135,7 +135,7 @@ export async function listHarnessScenarios(): Promise<HarnessScenarioListRespons
 
 export async function runSecurityHarness(
   scenarioIds: string[] | null = null,
-  resetDemoData = true
+  resetDemoData = false
 ): Promise<HarnessRunResponse> {
   return request<HarnessRunResponse>("/harness/run", {
     method: "POST",
@@ -162,13 +162,15 @@ export async function getEvaluationSummary(): Promise<EvaluationSummaryResponse>
 
 export async function runEvaluation(
   runHarnessIfEmpty = true,
-  reportType = "full"
+  reportType = "full",
+  harnessRunId: string | null = null
 ): Promise<EvaluationRunResponse> {
   return request<EvaluationRunResponse>("/evaluation/run", {
     method: "POST",
     body: {
       run_harness_if_empty: runHarnessIfEmpty,
-      report_type: reportType
+      report_type: reportType,
+      harness_run_id: harnessRunId
     }
   });
 }

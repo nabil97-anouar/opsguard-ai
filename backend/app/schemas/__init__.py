@@ -22,7 +22,6 @@ from app.schemas.evaluation import (
     EvaluationRunRequest,
     EvaluationRunResponse,
     EvaluationScoreListResponse,
-    EvaluationScoreRead,
     EvaluationScoreResponse,
     EvaluationSummaryResponse,
 )
@@ -90,7 +89,6 @@ __all__ = [
     "EvaluationRunRequest",
     "EvaluationRunResponse",
     "EvaluationScoreListResponse",
-    "EvaluationScoreRead",
     "EvaluationScoreResponse",
     "EvaluationSummaryResponse",
     "HealthResponse",

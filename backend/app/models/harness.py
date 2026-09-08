@@ -6,7 +6,21 @@ from uuid import UUID
 
 from sqlmodel import Field
 
-from app.models.base import CreatedAtMixin, UUIDPrimaryKeyMixin, json_column
+from app.models.base import CreatedAtMixin, UUIDPrimaryKeyMixin, json_column, timestamp_column, utcnow
+
+
+class SecurityHarnessRun(UUIDPrimaryKeyMixin, table=True):
+    __tablename__ = "security_harness_runs"
+
+    provenance: str = Field(default="legacy_unknown", max_length=30)
+    status: str = Field(default="running", max_length=30)
+    started_at: datetime = Field(default_factory=utcnow, sa_column=timestamp_column())
+    completed_at: datetime | None = Field(default=None, sa_column=timestamp_column(nullable=True))
+    scenario_manifest: list[dict[str, Any]] = Field(default_factory=list, sa_column=json_column())
+    expected_case_count: int = 0
+    completed_case_count: int = 0
+    provider_version: str | None = None
+    policy_version: str | None = None
 
 
 class SecurityHarnessTest(UUIDPrimaryKeyMixin, table=True):
@@ -29,6 +43,9 @@ class SecurityHarnessResult(UUIDPrimaryKeyMixin, CreatedAtMixin, table=True):
     __tablename__ = "security_harness_results"
 
     harness_run_id: UUID = Field(index=True)
+    provenance: str = Field(default="legacy_unknown", max_length=30)
+    test_level: str = Field(default="unknown", max_length=30)
+    scenario_version: str = Field(default="unknown", max_length=50)
     test_id: UUID = Field(foreign_key="security_harness_tests.id", index=True)
     score: int = 0
     max_score: int = 10

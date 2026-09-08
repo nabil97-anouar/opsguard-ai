@@ -43,21 +43,23 @@ curl --fail-with-body -X POST http://localhost:8000/api/v1/harness/run \
 
 curl --fail-with-body -X POST http://localhost:8000/api/v1/evaluation/run \
   -H "Content-Type: application/json" \
-  -d '{"run_harness_if_empty": false, "report_type": "full"}'
+  -d '{"harness_run_id": "REPLACE_WITH_HARNESS_RUN_ID", "run_harness_if_empty": false, "report_type": "full"}'
 
-curl --fail-with-body http://localhost:8000/api/v1/evaluation/report.md
-curl --fail-with-body http://localhost:8000/api/v1/evaluation/report.json
+curl --fail-with-body 'http://localhost:8000/api/v1/evaluation/report.md?evaluation_run_id=REPLACE_WITH_EVALUATION_ID'
+curl --fail-with-body 'http://localhost:8000/api/v1/evaluation/report.json?evaluation_run_id=REPLACE_WITH_EVALUATION_ID'
 ```
 
-Check the harness's passed, partial, and failed cases individually. One scenario executes the full agent; the others exercise tool or watchdog components. See [scenario coverage](SECURITY_HARNESS.md).
+Copy the harness response's execution ID into evaluation, then copy the evaluation response's ID into both report URLs. Check case pass/fail, test levels, and named mandatory-invariant failures individually. New executions never receive partial credit; `partial` is readable only for historical records. One scenario executes the full agent; two are component cases, five are policy cases, and one tests the tool boundary. See [scenario coverage](SECURITY_HARNESS.md).
 
-The seed contains prewritten results. Evaluation does not automatically distinguish those from executed results, and its non-harness counters span broader database history. Explicit harness execution establishes which cases just ran, but it does not isolate every report metric. See [evaluation formulas and scope](EVALUATION.md).
+The seed contains prewritten results labeled `fixture`. They cannot satisfy an execution requirement, including `run_harness_if_empty`. Reports evaluate one explicit executed cohort, show raw metric counts/denominators, and preserve scenario/provider/policy versions. The two exports identify the same stored cohort and remain unchanged after unrelated agent activity. See [evaluation formulas and scope](EVALUATION.md).
 
 ## Data and reset behavior
 
-The seed operation upserts a fixed set of records; it can update sample history even with `reset: false`. The harness also reseeds data. Its default `reset_demo_data` is `true`; the requests above explicitly use `false`.
+The seed operation upserts a fixed set of records; it can update sample history even with `reset: false`. The harness also reseeds data. Its default `reset_demo_data` is `false`, preserving existing history and Milestone 1 trust demotions.
 
-Reset deletes fixed seeded IDs, not every dependent record created later. It can fail with foreign-key enforcement when later runs or evaluations reference those records. Use an isolated database for these procedures. The dashboard's harness button requests a reset and therefore has the same constraint.
+Explicit reset recreates fixed fixture history and can conflict with dependent historical records under foreign-key enforcement. Use a disposable database for reset experiments. Normal evaluation and harness requests do not need a reset.
+
+The automated [integrity reproduction](../scripts/verify_evaluation_integrity.py) uses a disposable SQLite database to seed fixtures, execute a real harness, evaluate that ID, export both formats, perform unrelated agent activity, and verify that the stored exports remain byte-for-byte unchanged.
 
 ## Existing shell helper
 

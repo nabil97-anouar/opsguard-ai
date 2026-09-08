@@ -32,8 +32,9 @@ export function DemoSeedCard({
           </p>
           <CardTitle className="mt-3">Seed and exercise the local stack</CardTitle>
           <CardDescription className="mt-3">
-            Seed sample alerts and runbooks, then run the bundled security scenarios.
-            The harness resets seeded records before executing its cases.
+            Seeding includes example history labeled fixture; it does not execute tests.
+            Run the bundled security scenarios to record an actual execution.
+            Harness execution preserves existing investigation and report history.
           </CardDescription>
         </div>
         <SafetyBadge value="no real infrastructure actions" />

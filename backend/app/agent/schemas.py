@@ -22,6 +22,10 @@ class StepExecutionSummary(BaseModel):
 
 
 class AgentRunResult(BaseModel):
+    provenance: str = "legacy_unknown"
+    execution_kind: str = "unknown"
+    provider_version: str | None = None
+    policy_version: str | None = None
     agent_run_id: UUID
     alert_id: UUID
     status: str

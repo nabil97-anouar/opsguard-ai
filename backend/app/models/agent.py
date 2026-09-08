@@ -13,6 +13,10 @@ class AgentRun(UUIDPrimaryKeyMixin, table=True):
     __tablename__ = "agent_runs"
 
     alert_id: UUID = Field(foreign_key="alerts.id", index=True)
+    provenance: str = Field(default="legacy_unknown", max_length=30)
+    execution_kind: str = Field(default="unknown", max_length=30)
+    provider_version: str | None = None
+    policy_version: str | None = None
     status: str = Field(default="running", max_length=30, index=True)
     llm_provider: str = Field(default="mock", max_length=50)
     model_version: str | None = Field(default=None, max_length=50)

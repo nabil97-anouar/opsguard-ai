@@ -28,6 +28,8 @@ export type DemoSeedResponse = {
 };
 
 export type TrustLevel = "trusted" | "untrusted" | "quarantined";
+export type ExecutionProvenance = "executed" | "fixture" | "legacy_unknown";
+export type HarnessTestLevel = "end_to_end" | "component" | "policy" | "tool_boundary" | "legacy_unknown";
 
 export type DocumentListItem = {
   id: string;
@@ -209,6 +211,10 @@ export type AgentRunDetailResponse = {
   agent_run_id: string;
   alert_id: string;
   status: string;
+  provenance: ExecutionProvenance;
+  execution_kind: string;
+  provider_version: string | null;
+  policy_version: string | null;
   llm_provider: string;
   model_version: string | null;
   risk_level: string;
@@ -227,6 +233,7 @@ export type AgentRunListItem = {
   agent_run_id: string;
   alert_id: string;
   status: string;
+  provenance: ExecutionProvenance;
   risk_level: string;
   approval_status: string;
   started_at: string;
@@ -251,6 +258,9 @@ export type WatchdogPolicyItem = {
 
 export type HarnessScenarioResponse = {
   scenario_id: string;
+  scenario_version: string;
+  test_level: HarnessTestLevel;
+  expectations: Record<string, unknown>;
   name: string;
   category: string;
   description: string;
@@ -269,6 +279,16 @@ export type HarnessScenarioListResponse = {
 
 export type HarnessResultResponse = {
   scenario_id: string;
+  scenario_version: string;
+  test_level: HarnessTestLevel;
+  provenance: ExecutionProvenance;
+  mandatory_invariants: Record<string, boolean>;
+  invariant_failures: string[];
+  expectations: Record<string, unknown>;
+  observations: Record<string, unknown>;
+  human_review_required: boolean | null;
+  human_review_reached: boolean | null;
+  terminal_status: string | null;
   name: string;
   category: string;
   status: "passed" | "failed" | "partial";
@@ -290,8 +310,16 @@ export type HarnessResultResponse = {
 };
 
 export type HarnessRunResponse = {
-  status: "completed";
+  status: "running" | "completed" | "failed" | "not_executed" | "legacy_unknown";
   harness_run_id: string;
+  provenance: ExecutionProvenance;
+  started_at: string | null;
+  completed_at: string | null;
+  expected_case_count: number | null;
+  completed_case_count: number;
+  provider_version: string | null;
+  policy_version: string | null;
+  scenario_manifest: Array<Record<string, unknown>>;
   total: number;
   passed: number;
   failed: number;
@@ -304,76 +332,53 @@ export type HarnessResultListResponse = {
   items: HarnessResultResponse[];
 };
 
-export type EvaluationScorecard = {
-  safety_score: number;
-  grounding_score: number;
-  tool_safety_score: number;
-  watchdog_score: number;
-  overall_score: number;
+export type EvaluationMetric = {
+  numerator: number;
+  denominator: number;
+  value: number | null;
+  unit: "rate";
+  definition: string;
 };
 
-export type EvaluationHarnessPerformance = {
-  total_scenarios: number;
-  passed: number;
-  partial: number;
-  failed: number;
-  pass_rate: number;
-  average_score: number;
-  latest_harness_run_id: string | null;
+export type EvaluationCohort = {
+  harness_run_id: string | null;
+  provenance: "executed" | "none";
+  execution_started_at: string | null;
+  execution_completed_at: string | null;
+  agent_run_ids: string[];
+  component_run_ids: string[];
+  scenario_manifest: Array<{
+    scenario_id: string;
+    scenario_version: string;
+    test_level: HarnessTestLevel;
+    [key: string]: unknown;
+  }>;
+  expected_case_count: number;
+  completed_case_count: number;
+  provider_version: string | null;
+  policy_version: string | null;
 };
 
 export type EvaluationSummaryResponse = {
+  schema_version: "evaluation-v2";
+  report_kind: "stored" | "live_preview";
+  evaluation_run_id: string | null;
   generated_at: string;
   report_type: string;
-  latest_agent_run_id: string | null;
-  latest_harness_run_id: string | null;
-  harness_performance: EvaluationHarnessPerformance;
-  prompt_injection_resistance: {
-    prompt_injection_events: number;
-    unsafe_tool_output_events: number;
-    suspicious_retrieval_events: number;
-    prompt_injection_scenarios_passed: number;
-    prompt_injection_scenarios_total: number;
-  };
-  tool_safety: {
-    total_tool_calls: number;
-    blocked_tool_calls: number;
-    failed_tool_calls: number;
-    flagged_tool_outputs: number;
-    dangerous_tool_attempts: number;
-    arbitrary_shell_execution_present: boolean;
-  };
-  agent_quality: {
-    total_agent_runs: number;
-    waiting_for_human_runs: number;
-    failed_runs: number;
-    average_confidence: number;
-    low_confidence_high_severity_count: number;
-    runs_with_self_assessment: number;
-    runs_with_ticket_draft: number;
-  };
-  grounding_evidence: {
-    runs_with_citations: number;
-    runs_missing_citations: number;
-    weak_grounding_events: number;
-    untrusted_context_events: number;
-  };
-  human_approval_enforcement: {
-    runs_requiring_human_approval: number;
-    dangerous_recommendations_requiring_human_approval: number;
-    auto_executed_dangerous_actions: number;
-  };
-  scorecard: EvaluationScorecard;
-  executive_summary: string;
+  cohort: EvaluationCohort;
+  metrics: Record<string, EvaluationMetric>;
+  scenario_results: HarnessResultResponse[];
+  agent_run_snapshots: Array<Record<string, unknown>>;
+  failed_scenarios: string[];
+  mandatory_invariant_failures: Array<{ scenario_id: string; invariant: string }>;
   limitations: string[];
 };
 
 export type EvaluationRunResponse = {
   status: "ok";
   persisted: boolean;
-  evaluation_score_id: string | null;
+  evaluation_run_id: string;
   summary: EvaluationSummaryResponse;
-  scorecard: EvaluationScorecard;
 };
 
 export const DEMO_ALERT_IDS = {

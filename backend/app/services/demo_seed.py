@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID, uuid5
 
 from sqlalchemy import delete
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.db import session as db_session
 from app.db.init_db import create_db_and_tables
@@ -1325,6 +1325,10 @@ def upsert_record(
 ) -> Any:
     existing = session.get(model, record.id)
     payload = dict(record.payload)
+    if model is AgentRun:
+        payload.update(provenance="fixture", execution_kind="fixture", provider_version=None, policy_version=None)
+    elif model is SecurityHarnessResult:
+        payload.update(provenance="fixture", test_level="unknown", scenario_version="demo-fixture-v1")
     if model is Document and existing is not None:
         payload["trust_level"] = resolve_effective_trust(
             existing.trust_level, payload["trust_level"]
@@ -1420,6 +1424,10 @@ def reset_demo_data(session: Session, bundle: DemoSeedBundle) -> None:
 
     for model in deletion_order:
         record_ids = bundle.all_ids.get(model, [])
+        if model is Alert:
+            # Executed runs retain their input alert identity across demo reset.
+            referenced = set(session.exec(select(AgentRun.alert_id)).all())
+            record_ids = [record_id for record_id in record_ids if record_id not in referenced]
         if record_ids:
             session.exec(delete(model).where(model.id.in_(record_ids)))
 

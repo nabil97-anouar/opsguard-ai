@@ -19,10 +19,11 @@ from app.agent.nodes import (
 )
 from app.agent.schemas import AgentRunResult, StepExecutionSummary
 from app.agent.state import AgentState, AssessmentSnapshot, FinalRecommendation
+from app.core.versions import POLICY_VERSION, PROVIDER_VERSION
 from app.models import AgentRun, AgentStep, Alert, SelfAssessment, ToolCall
 from app.models.base import utcnow
 
-RUNNER_MODEL_VERSION = "deterministic-mock-v2"
+RUNNER_MODEL_VERSION = PROVIDER_VERSION
 
 
 def _ensure_aware(value: datetime) -> datetime:
@@ -33,6 +34,10 @@ def _ensure_aware(value: datetime) -> datetime:
 
 def _state_result(state: AgentState, agent_run: AgentRun) -> AgentRunResult:
     return AgentRunResult(
+        provenance=agent_run.provenance,
+        execution_kind=agent_run.execution_kind,
+        provider_version=agent_run.provider_version,
+        policy_version=agent_run.policy_version,
         agent_run_id=agent_run.id,
         alert_id=agent_run.alert_id,
         status=agent_run.status,
@@ -67,6 +72,10 @@ def create_agent_run(session: Session, *, alert_id: UUID) -> AgentRun:
 
     agent_run = AgentRun(
         alert_id=alert_id,
+        provenance="executed",
+        execution_kind="agent_workflow",
+        provider_version=PROVIDER_VERSION,
+        policy_version=POLICY_VERSION,
         status="running",
         llm_provider="mock",
         model_version=RUNNER_MODEL_VERSION,

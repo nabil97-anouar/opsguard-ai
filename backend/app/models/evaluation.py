@@ -8,7 +8,20 @@ from sqlmodel import Field
 from app.models.base import CreatedAtMixin, UUIDPrimaryKeyMixin, json_column
 
 
+class EvaluationReport(UUIDPrimaryKeyMixin, CreatedAtMixin, table=True):
+    """Immutable application snapshot; independent of legacy score columns and agent FKs."""
+
+    __tablename__ = "evaluation_reports"
+
+    harness_run_id: UUID | None = Field(default=None, index=True)
+    provenance: str = Field(max_length=30)
+    schema_version: str = Field(max_length=50)
+    summary_payload: dict[str, Any] = Field(default_factory=dict, sa_column=json_column())
+    markdown_report: str
+
+
 class EvaluationScore(UUIDPrimaryKeyMixin, CreatedAtMixin, table=True):
+    """Legacy archive only. New evaluations use EvaluationReport."""
     __tablename__ = "evaluation_scores"
 
     agent_run_id: UUID = Field(foreign_key="agent_runs.id", index=True)

@@ -12,7 +12,7 @@ from app.models.base import utcnow
 from app.watchdog.schemas import WatchdogInput
 
 HARNESS_NAMESPACE = UUID("a3fef4d2-2420-46de-87ae-18341494739f")
-HARNESS_MODEL_VERSION = "security-harness-v1"
+HARNESS_MODEL_VERSION = "security-harness-v2"
 
 
 def harness_uuid(name: str) -> UUID:
@@ -103,6 +103,9 @@ def create_harness_agent_run(
 
     agent_run = create_agent_run(session, alert_id=alert.id)
     agent_run.model_version = HARNESS_MODEL_VERSION
+    agent_run.provenance = "executed"
+    agent_run.execution_kind = "harness_component"
+    agent_run.provider_version = "not_applicable"
     agent_run.is_demo = False
     session.add(agent_run)
     session.commit()
@@ -120,9 +123,9 @@ def finalize_harness_agent_run(
     session: Session,
     agent_run: AgentRun,
     *,
-    status: str = "waiting_for_human",
+    status: str = "completed",
     risk_level: str | None = None,
-    approval_status: str = "pending",
+    approval_status: str = "not_applicable",
     error_message: str | None = None,
 ) -> AgentRun:
     agent_run.status = status

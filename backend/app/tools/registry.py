@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from contextlib import contextmanager
+from contextvars import ContextVar
+from collections.abc import Iterator
 from types import MappingProxyType
 from typing import Any, Mapping
 
@@ -44,6 +47,33 @@ DANGEROUS_TOOL_NAMES = (
     "isolate_node",
     "disable_service",
 )
+
+
+# A context-local trace records entry to actual handlers, including handlers that
+# subsequently raise or return a misleading status. Normal execution is unchanged.
+_execution_observations: ContextVar[list[dict[str, Any]] | None] = ContextVar("tool_execution_observations", default=None)
+
+
+@contextmanager
+def observe_tool_execution() -> Iterator[list[dict[str, Any]]]:
+    observations: list[dict[str, Any]] = []
+    token = _execution_observations.set(observations)
+    try:
+        yield observations
+    finally:
+        _execution_observations.reset(token)
+
+
+def _observe_execution(event: str, definition: ToolDefinition, input_args: dict[str, Any]) -> None:
+    observations = _execution_observations.get()
+    if observations is not None:
+        observations.append({
+            "event": event,
+            "tool_name": definition.name,
+            "input_args": input_args,
+            "is_destructive": definition.is_destructive,
+            "requires_human_approval": definition.requires_human_approval,
+        })
 
 
 def _build_registry() -> dict[str, ToolDefinition]:
@@ -268,6 +298,8 @@ def execute_tool(
     validated_input = definition.input_schema.model_validate(input)
     input_payload = validated_input.model_dump(mode="json")
 
+    _observe_execution("attempt", definition, input_payload)
+
     if not definition.executable:
         blocked_output_model = BlockedToolOutput.model_validate(
             blocked_tool_handler(validated_input, session, context)
@@ -311,6 +343,7 @@ def execute_tool(
 
     try:
         assert definition.handler is not None
+        _observe_execution("handler_invocation", definition, input_payload)
         raw_output = definition.handler(validated_input, session, context)
         validated_output = definition.output_schema.model_validate(raw_output)
         output_payload = validated_output.model_dump(mode="json")

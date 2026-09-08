@@ -15,7 +15,7 @@ A FastAPI service runs the investigation through a closed tool registry and a fi
 - Seven executable local tools for observations, runbook retrieval, incident lookup, and internal ticket drafting.
 - Persisted investigation steps, tool-call records, assessments, and watchdog findings.
 - Nine security regression scenarios covering retrieved content, tool output, unsafe actions, and review requirements.
-- Dashboard inspection and Markdown/JSON evaluation exports.
+- Dashboard inspection and stored Markdown/JSON reports with explicit execution cohorts, versions, provenance, and metric denominators.
 
 ## Architecture
 
@@ -57,11 +57,11 @@ Every successful investigation ends in a human-review state. This is a terminal 
 
 ## Evaluation
 
-The harness provides deterministic security regression checks: one scenario runs the full agent workflow, while eight exercise tool or policy components. Case results record Boolean checks and partial-credit scores.
+The harness provides nine deterministic security regression checks: one full agent workflow, two component cases, five policy cases, and one tool-boundary case. Each result records its test level, explicit expectations, and mandatory-invariant outcomes. New executions use strict pass/fail; a destructive handler invocation forces failure.
 
-Actual execution invariants include keeping destructive definitions non-executable and ending successful agent runs at human review. Citation counts, assessment presence, and weighted report scores are heuristic indicators; they do not establish semantic correctness, calibrated confidence, or general prompt-injection resistance.
+Evaluation selects one completed executed harness cohort and snapshots its scenario/provider/policy versions, related run IDs, result observations, and metrics. Every rate exposes numerator and denominator, with `null` for an unavailable rate. Reports cover application invariant preservation, structural evidence integrity, and terminal human review; they do not establish semantic correctness, calibrated confidence, or general prompt-injection resistance. There is no overall AI safety score.
 
-Seeding also creates illustrative historical results. Current evaluation can include those records and combines the latest harness results with broader database history. Run the harness explicitly before evaluating and interpret the report using its documented scope. See [scenario coverage](docs/SECURITY_HARNESS.md) and [metric formulas and limitations](docs/EVALUATION.md).
+Seeding creates clearly labeled fixture history, which cannot satisfy an execution requirement. Evaluate the returned `harness_run_id` and retain the `evaluation_run_id` for matching JSON/Markdown exports. Stored reports do not change when unrelated agent activity occurs. See [scenario coverage](docs/SECURITY_HARNESS.md) and [metric formulas and limitations](docs/EVALUATION.md).
 
 ## Quick Start
 
@@ -152,7 +152,7 @@ Trust labels do not authenticate sources, and valid evidence references do not e
 ## Roadmap
 
 - Reviewed trust promotion, source authentication, and claim-level support checks.
-- Isolated, versioned benchmark cohorts that distinguish executed outcomes from sample history.
+- Broader independently labeled evaluation cases and isolated benchmark environments.
 - Consistent tool-invocation auditing, transaction recovery, and database migrations.
 - An injected reasoning-provider interface that preserves deterministic testing.
 - Authenticated review workflows and bounded external integrations.

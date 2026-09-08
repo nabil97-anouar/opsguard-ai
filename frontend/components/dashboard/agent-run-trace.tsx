@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { JsonInspector } from "@/components/dashboard/json-inspector";
+import { ProvenanceLabel } from "@/components/dashboard/provenance-label";
 import { SafetyBadge } from "@/components/dashboard/safety-badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { AgentRunDetailResponse, AgentStep, FinalRecommendation } from "@/lib/types";
@@ -162,6 +163,7 @@ export function AgentRunTrace({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <ProvenanceLabel provenance={agentRun.provenance} />
           <SafetyBadge value={agentRun.status} />
           <SafetyBadge value={agentRun.risk_level} />
           <SafetyBadge value={agentRun.approval_status} />

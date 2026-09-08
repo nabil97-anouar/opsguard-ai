@@ -15,7 +15,11 @@ def get_registered_table_names() -> list[str]:
 def create_db_and_tables(active_engine: Engine | None = None) -> list[str]:
     import app.models  # noqa: F401
 
-    SQLModel.metadata.create_all(active_engine or db_session.engine)
+    target_engine = active_engine or db_session.engine
+    SQLModel.metadata.create_all(target_engine)
+    from app.db.compatibility import upgrade_evaluation_integrity
+
+    upgrade_evaluation_integrity(target_engine)
     return get_registered_table_names()
 
 
