@@ -9,7 +9,6 @@ from app.models import ToolExecutionAudit
 from app.models.base import utcnow
 from app.tools.hygiene import snapshot
 
-from app.db.init_db import create_db_and_tables
 from app.db.session import get_session
 from app.schemas.tools import ToolExecuteRequest, ToolExecuteResponse, ToolListItem, ToolListResponse
 from app.tools import ToolExecutionContext, UnknownToolError, execute_tool, list_tools
@@ -19,7 +18,6 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 
 @router.get("", response_model=ToolListResponse)
 def list_tool_definitions() -> ToolListResponse:
-    create_db_and_tables()
     items = [
         ToolListItem(
             name=definition.name,
@@ -45,7 +43,6 @@ async def execute_tool_route(
     request: Request,
     session: Session = Depends(get_session),
 ) -> ToolExecuteResponse:
-    create_db_and_tables(session.get_bind())
     try:
         body = await request.body()
         if len(body) > 65536:
@@ -106,7 +103,6 @@ async def execute_tool_route(
 
 @router.get("/attempts")
 def list_tool_attempts(agent_run_id: UUID | None = None, session: Session = Depends(get_session)):
-    create_db_and_tables(session.get_bind())
     query = select(ToolExecutionAudit)
     if agent_run_id is not None:
         query = query.where(ToolExecutionAudit.agent_run_id == agent_run_id)

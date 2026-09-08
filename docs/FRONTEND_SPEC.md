@@ -22,7 +22,7 @@ Completed investigations end with `waiting_for_human`. This is a terminal review
 
 | Section | What it displays |
 | --- | --- |
-| Backend overview | Health response, configured environment and reasoning provider, document counts, separate executable/blocked tool counts, and policy count. The health response is not a complete dependency-readiness check. |
+| Backend overview | Health response, environment and deterministic reasoner, document counts, separate executable/blocked tool counts, and policy count. This liveness response does not check dependencies; `/ready` is the SQL readiness probe. |
 | Sample data and tests | Seeding and harness controls, progress messages, and the most recent seed summary. |
 | Agent scenarios | Launch controls for the two bundled investigations. |
 | Scenario catalog | Static descriptions and labels for four sample incidents. These labels describe fixtures rather than current alert state. |
@@ -57,7 +57,7 @@ See [Evaluation](EVALUATION.md), [RAG Design](RAG_DESIGN.md), and [Security Boun
 
 ## Frontend configuration and checks
 
-The browser API address comes from `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000/api/v1`. For native development, supply it in the frontend process environment or `frontend/.env.local`. Public Next.js environment values are embedded during the build; changing a container's runtime environment does not update the browser bundle.
+The browser API address comes from `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000/api/v1`. For native development, supply it in the frontend process environment or `frontend/.env.local`. Public Next.js environment values are embedded during the build. Compose passes the API URL as a build argument; rebuild to change it. Runtime environment changes cannot update the browser bundle.
 
 Only the API base URL belongs in frontend configuration. Provider credentials must remain on the backend. The layout currently uses `next/font/google`, so builds require access to download the configured fonts.
 

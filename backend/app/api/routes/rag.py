@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app.db.init_db import create_db_and_tables
 from app.db.session import get_session
 from app.rag.retrieval import retrieve_chunks
 from app.schemas.rag import RagRetrieveRequest, RagRetrieveResponse, RetrievalChunk
@@ -16,7 +15,6 @@ def retrieve_rag_chunks(
     request: RagRetrieveRequest,
     session: Session = Depends(get_session),
 ) -> RagRetrieveResponse:
-    create_db_and_tables()
     results = retrieve_chunks(
         session,
         query=request.query,

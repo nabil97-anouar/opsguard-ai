@@ -5,6 +5,9 @@ from typing import AsyncIterator, Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from uuid import uuid4
 
 from app.api.routes.agent import router as agent_router
 from app.api.routes.db import router as db_router
@@ -31,8 +34,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         "application_starting",
         extra={
             "environment": settings.environment,
-            "llm_provider": settings.llm_provider,
-            "mock_llm": settings.mock_llm,
+            "reasoner": "deterministic-mock-v2",
         },
     )
     yield
@@ -55,12 +57,29 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @application.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        # Pydantic error inputs/context can echo entire credential-bearing bodies.
+        return JSONResponse(status_code=422, content={"detail": [
+            {key: item[key] for key in ("loc", "type", "msg") if key in item}
+            for item in exc.errors()
+        ]})
+
     @application.middleware("http")
     async def add_security_headers(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        response = await call_next(request)
+        request_id = str(uuid4())
+        request.state.request_id = request_id
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Log classification/correlation only: exception text can contain SQL,
+            # credentials or request bodies. Never return a traceback to clients.
+            logger.error("request_failed", extra={"request_id": request_id, "exception_type": type(exc).__name__})
+            response = JSONResponse(status_code=500, content={"detail": "Internal server error.", "request_id": request_id})
+        response.headers["X-Request-ID"] = request_id
         for header_name, header_value in get_default_security_headers().items():
             response.headers.setdefault(header_name, header_value)
         return response

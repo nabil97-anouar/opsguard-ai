@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.errors import error_summary
+
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -120,7 +122,7 @@ def run_agent_for_alert(session: Session, *, alert_id: UUID) -> AgentRunResult:
         return _state_result(state, agent_run)
     except Exception as exc:
         agent_run.status = "failed"
-        agent_run.error_message = str(exc)
+        agent_run.error_message = error_summary(exc)
         if agent_run.completed_at is None:
             agent_run.completed_at = utcnow()
             agent_run.duration_seconds = round(

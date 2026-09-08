@@ -1,77 +1,86 @@
-# Setup and Configuration
+# Setup and configuration
 
-The [Quick Start](../README.md#quick-start) uses a local Python backend, a Next.js development server, and SQLite. Run its backend commands in the same terminal so the database and CORS environment variables remain available to the server.
+Use Python **3.11**, Node **22** and npm (the version bundled with Node 22 is suitable). `.python-version` and `.nvmrc` record those supported lines. Initial package installation requires network access. The following commands run from the repository root unless specified otherwise.
+
+## Native local setup
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --require-hashes -r backend/requirements-dev.txt
+export PYTHONPATH=backend
+export DATABASE_URL=sqlite:///./opsguard.db
+python -m app.db.init_db
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+The initialization command creates missing tables and applies the existing additive compatibility updates. Run it explicitly before first use and after pulling schema changes. Ordinary routes never run DDL. An existing deployment can initialize with an owner account, then run the API with a SQL account that lacks DDL privileges. The local Compose example uses one development database account; it does not provision roles.
+
+In a second terminal:
+
+```bash
+cd frontend
+# If nvm is installed: nvm use
+npm ci
+npm run dev
+```
+
+Open `http://localhost:3000`. In a third terminal at the root:
+
+```bash
+curl --fail http://localhost:8000/api/v1/health
+curl --fail http://localhost:8000/api/v1/ready
+bash scripts/demo_walkthrough.sh
+```
+
+The walkthrough uses seeded IDs, executes two investigations, runs the harness without resetting prior activity, evaluates that explicit execution, and exports the stored report by evaluation ID. It requires curl and python3; jq is optional. Override `BASE_URL` or the complete `API_URL` for a different local port/prefix. Failed HTTP requests, missing JSON fields, failed investigations and failed harness assertions stop with an error.
 
 ## Configuration
 
-Backend settings are defined in [Settings](../backend/app/core/config.py). Process environment variables override dotenv values. Dotenv paths are relative to the working directory: `.env` followed by `../.env`; the latter takes precedence when both define a setting.
+[Settings](../backend/app/core/config.py) reads `.env` and `../.env` relative to the working directory (the latter wins), then process environment overrides both. `.env.example` is optional; the commands above supply their active settings explicitly. Do not commit local env files or databases.
 
-| Setting | Current behavior |
+| Setting | Behavior |
 | --- | --- |
-| `DATABASE_URL` | Defaults to local PostgreSQL. Set `sqlite:///./opsguard.db` when running from `backend/` for the SQLite setup. |
-| `ENVIRONMENT` | Defaults to `development`. The direct seed and create-tables endpoints reject `production`; this does not protect every indirect setup path. |
-| `LOG_LEVEL` | Logging verbosity; defaults to `INFO`. |
-| `BACKEND_CORS_ORIGINS` | Use a JSON array, such as `'["http://localhost:3000","http://127.0.0.1:3000"]'`. The comma-separated value in the existing example file is incompatible with settings-source JSON decoding. |
-| `LLM_PROVIDER`, `MOCK_LLM` | Affect configuration/reporting, but do not select a reasoning implementation. Agent runs always use deterministic local functions. |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Reserved settings; no provider integrations consume them. Leave them empty. |
-| `QDRANT_URL` | Reserved configuration; retrieval does not connect to Qdrant. |
-| `SECRET_KEY` in `.env.example` | Not a declared application setting; it does not enable authentication. |
+| `DATABASE_URL` | SQLAlchemy `sqlite` or `postgresql+psycopg` URL; default local PostgreSQL. SQLite paths are relative to the process working directory. |
+| `ENVIRONMENT` | `development` (default), `staging`, or `production`. Direct seed/create-table endpoints are disabled in production; this is not an authentication boundary. |
+| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
+| `BACKEND_CORS_ORIGINS` | JSON array or comma-separated explicit HTTP(S) origins. Empty disables cross-origin access. Wildcards, credentials and paths are rejected. |
+| `API_V1_PREFIX` | Defaults to `/api/v1`; must start with `/` without trailing slash, query or fragment. |
+| `NEXT_PUBLIC_API_BASE_URL` | Frontend **build-time** browser URL; defaults to `http://localhost:8000/api/v1`. May be a same-origin path when a proxy is provided externally. This repository does not provide a proxy. |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Compose-only development database settings; native clients must set a matching `DATABASE_URL`. |
 
-The [example environment file](../.env.example) includes reserved settings. It is not required by the primary setup, which supplies its active settings explicitly.
+Removed provider/API-key, mock-toggle, Qdrant and unused secret settings have no effect. The only implemented reasoner is deterministic; `/health` identifies it explicitly. Unrecognized dotenv fields are ignored so Compose/frontend values can share the example file. No real integrations or auth are enabled by environment variables.
 
-The frontend reads `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000/api/v1`. Next.js started from `frontend/` does not load a repository-root `.env` as its project environment file. Use a process variable, as in the Quick Start, or `frontend/.env.local`. Public variables are embedded in client code during a production build; do not put credentials in them.
+Next.js reads its process environment or `frontend/.env.local`; it does not load root `.env` in native mode. The browser API URL is public and embedded during build. Changing a running frontend container's environment cannot change it: pass a build argument and rebuild. Never place credentials in `NEXT_PUBLIC_*`. Google font compilation currently requires network access.
 
-Initial dependency installation requires network access. [layout.tsx](../frontend/src/app/layout.tsx) uses Google fonts through `next/font`, so font compilation also requires access to those resources.
-
-## PostgreSQL alternative
-
-With Docker running, start the database from the repository root:
+## Compose
 
 ```bash
-docker compose up -d postgres
-```
-
-In the backend terminal, after creating and installing the Python environment as described in the Quick Start:
-
-```bash
-cd backend
-export ENVIRONMENT=development
-export DATABASE_URL=postgresql+psycopg://opsguard:opsguard@localhost:5432/opsguard_ai
-export BACKEND_CORS_ORIGINS='["http://localhost:3000","http://127.0.0.1:3000"]'
-.venv/bin/python -m app.db.init_db
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-These database credentials are the Compose defaults. If you override `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `POSTGRES_DB`, use matching credentials in the native backend URL. Use the same frontend and seeding steps as the Quick Start.
-
-Schema initialization uses SQLModel `create_all`; it creates missing tables but does not migrate an existing schema. SQLite foreign-key enforcement and PostgreSQL behavior differ in the current configuration. See [data model](DATA_MODEL.md) and [reset limitations](DEMO_SCRIPT.md#data-and-reset-behavior).
-
-## Docker Compose alternative
-
-The [Compose file](../docker-compose.yml) builds both applications and starts PostgreSQL and an unused Qdrant service. Supply CORS origins as JSON to override the current comma-separated default:
-
-```bash
-export BACKEND_CORS_ORIGINS='["http://localhost:3000","http://127.0.0.1:3000"]'
 docker compose config --quiet
-docker compose up --build
+docker compose build backend frontend
+docker compose up -d --wait
 ```
 
-Wait for the backend and frontend to start, then follow the Quick Start's health and seed requests. The database volume persists across container restarts. Stop containers without deleting volumes with:
+The stack contains PostgreSQL, a one-shot schema initializer, backend and frontend. The database must become healthy before initialization, and initialization must succeed before backend startup. Backend health checks use `/ready`; frontend starts after backend readiness. All published ports bind to `127.0.0.1`. Qdrant is absent because it is unused.
+
+Both runtime images use non-root users. Backend installs only hash-locked runtime dependencies; frontend copies Next.js standalone output without the full development dependency tree. Docker contexts exclude local env files, caches, databases and dependencies. Base images follow supported Python 3.11, Node 22 and PostgreSQL 16 lines, allowing upstream patch rebuilds; they are not digest-pinned.
+
+For a native backend with Compose PostgreSQL, run `docker compose up -d postgres` and set `DATABASE_URL=postgresql+psycopg://opsguard:opsguard@localhost:5432/opsguard_ai` (or matching custom credentials), then initialize explicitly. Passwords interpolated into Compose's database URL must be URL-safe. Defaults are local development credentials, not deployment credentials.
+
+`docker compose down` stops services and preserves the database volume. Do not delete the volume unless you intend to discard its data.
+
+## Checks and dependency maintenance
+
+[CONTRIBUTING.md](../CONTRIBUTING.md) lists the exact CI/local checks. CI uses one Python and Node line, with separate Backend, Frontend and Containers jobs. Scheduled runs refresh advisory results weekly. No remote CI success is implied by a local run.
+
+Runtime inputs are in `backend/requirements.in`; development inputs are in `backend/requirements-dev.in`. `pip-tools` is a development-only lock generator; installation remains plain pip. Both generated `.txt` files pin transitive versions and package hashes. After intentionally updating the inputs, regenerate from the root with Python 3.11:
 
 ```bash
-docker compose down
+pip-compile --generate-hashes --strip-extras --output-file=backend/requirements.txt backend/requirements.in
+pip-compile --generate-hashes --allow-unsafe --strip-extras --output-file=backend/requirements-dev.txt backend/requirements-dev.in
+python -m pip install --require-hashes -r backend/requirements-dev.txt
 ```
 
-Current Compose constraints:
+Linux's SQLAlchemy Greenlet dependency is explicitly locked even when generating on macOS. The lock targets Linux/macOS Python 3.11; Windows setup has not been verified. Frontend updates use npm and commit the lockfile; installation uses `npm ci`. The Next.js-scoped PostCSS override selects a patched compatible 8.x release instead of forcing a Next.js major migration; review/remove it when upstream pins a corrected release.
 
-- Published ports bind beyond loopback by default, including PostgreSQL and Qdrant. Use a trusted local development environment; the application has no authentication.
-- Qdrant is a backend startup dependency in Compose despite having no retrieval role.
-- The frontend API URL is supplied only at container runtime. Its built client uses the default localhost URL; changing the runtime variable does not configure a different deployment address.
-- Compose does not pass `ENVIRONMENT` to the backend, so setting it in the root dotenv file alone does not change the container's application environment.
-- Backend application readiness and schema migrations are not managed by Compose.
-
-## Verification scope
-
-Use the commands in [Development](../README.md#development) for source checks. `docker compose config --quiet` validates Compose configuration only; it does not build images or check service health. `/api/v1/health` reports configuration, while `/api/v1/db/health` attempts a database connection.
-
-The generated [OpenAPI schema](http://localhost:8000/openapi.json) is available with the backend running. The default content-security policy may block the external assets used by [Swagger UI](http://localhost:8000/docs).
+See [SECURITY.md](../SECURITY.md) for audit severity policy. Scanner/network errors do not count as clean results. There is no license file yet; a maintainer license decision remains outstanding.

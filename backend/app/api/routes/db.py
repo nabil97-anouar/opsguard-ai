@@ -19,7 +19,7 @@ def read_database_health() -> DatabaseHealthResponse:
     except Exception as exc:  # pragma: no cover - exercised by integration failures
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database unavailable: {exc}",
+            detail="Database unavailable. Check connectivity and server-side configuration.",
         ) from exc
 
     return DatabaseHealthResponse(

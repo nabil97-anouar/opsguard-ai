@@ -5,12 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session
 
-from app.db.init_db import create_db_and_tables
 from app.db.session import get_session
 from app.evaluation import (calculate_evaluation_summary, create_evaluation_report,
     generate_json_report, generate_markdown_report, get_evaluation_report,
     latest_executed_harness_run, list_evaluation_reports)
-from app.evaluation.schemas import EvaluationSummary
 from app.harness import run_security_harness
 from app.schemas.evaluation import (EvaluationReportResponse, EvaluationRunRequest,
     EvaluationRunResponse, EvaluationScoreListResponse, EvaluationSummaryResponse)
@@ -27,7 +25,6 @@ def _stored_report(session: Session, evaluation_run_id: UUID | None):
 
 @router.post("/run", response_model=EvaluationRunResponse)
 def run_evaluation(request: EvaluationRunRequest, session: Session = Depends(get_session)) -> EvaluationRunResponse:
-    create_db_and_tables(session.get_bind())
     selected_id = request.harness_run_id
     if selected_id is None:
         execution = latest_executed_harness_run(session)
@@ -46,7 +43,6 @@ def run_evaluation(request: EvaluationRunRequest, session: Session = Depends(get
 
 @router.get("/summary", response_model=EvaluationSummaryResponse)
 def get_evaluation_summary(evaluation_run_id: UUID | None = None, session: Session = Depends(get_session)):
-    create_db_and_tables(session.get_bind())
     stored = _stored_report(session, evaluation_run_id)
     if stored is not None:
         return stored.summary_payload
@@ -56,7 +52,6 @@ def get_evaluation_summary(evaluation_run_id: UUID | None = None, session: Sessi
 
 @router.get("/report.md")
 def get_evaluation_markdown_report(evaluation_run_id: UUID | None = None, session: Session = Depends(get_session)) -> Response:
-    create_db_and_tables(session.get_bind())
     stored = _stored_report(session, evaluation_run_id)
     markdown = stored.markdown_report if stored else generate_markdown_report(calculate_evaluation_summary(session))
     return Response(content=markdown, media_type="text/markdown")
@@ -64,12 +59,10 @@ def get_evaluation_markdown_report(evaluation_run_id: UUID | None = None, sessio
 
 @router.get("/report.json", response_model=EvaluationReportResponse)
 def get_evaluation_json_report(evaluation_run_id: UUID | None = None, session: Session = Depends(get_session)):
-    create_db_and_tables(session.get_bind())
     stored = _stored_report(session, evaluation_run_id)
     return stored.summary_payload if stored else generate_json_report(calculate_evaluation_summary(session))
 
 
 @router.get("/scores", response_model=EvaluationScoreListResponse)
 def get_evaluation_scores(session: Session = Depends(get_session)) -> EvaluationScoreListResponse:
-    create_db_and_tables(session.get_bind())
     return EvaluationScoreListResponse(status="ok", items=list_evaluation_reports(session))

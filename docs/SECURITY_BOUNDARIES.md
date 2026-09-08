@@ -60,11 +60,11 @@ See [Data Model](DATA_MODEL.md) and [Tool Registry](TOOL_REGISTRY.md) for storag
 
 The [FastAPI application](../backend/app/main.py) has CORS configuration and response security headers, but no authentication, per-user authorization, rate limiting, or tenant isolation. CORS and headers do not prevent direct API access.
 
-[docker-compose.yml](../docker-compose.yml) publishes ports 3000, 8000, 5432, 6333, and 6334 without a `127.0.0.1` bind restriction. PostgreSQL defaults use local development credentials, and the backend listens on all container interfaces. Host reachability depends on Docker and network configuration; the Compose file itself does not restrict published ports to localhost.
+[docker-compose.yml](../docker-compose.yml) binds ports 3000, 8000 and 5432 to `127.0.0.1`. PostgreSQL uses local development credentials. Qdrant is not started. Loopback exposure does not supply authentication or protect against other local processes.
 
-The explicit seeding and table-creation endpoints reject `ENVIRONMENT=production`, but that setting does not harden the application: other routes create tables, and harness/evaluation paths can seed or reset data. Use disposable fixture databases for these workflows and keep the API on a trusted local network boundary.
+The explicit seeding and table-creation endpoints reject `ENVIRONMENT=production`, but that setting does not harden the application: harness/evaluation paths can still seed or reset data. Ordinary routes perform no DDL; schema initialization is an explicit command or development setup endpoint Use disposable fixture databases for these workflows and keep the API on a trusted local network boundary.
 
-The current runner requires no external model keys. Provider-related configuration fields do not enable a real provider. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings.
+The current runner requires no external model keys. Unused provider, API-key and Qdrant configuration fields have been removed. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings.
 
 ## Interpreting evaluation
 

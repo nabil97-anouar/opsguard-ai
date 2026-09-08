@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.db.init_db import create_db_and_tables
 from app.db.session import get_session
 from app.rag.ingestion import ingest_document
 from app.rag.retrieval import list_documents
@@ -17,7 +16,6 @@ def ingest_document_route(
     request: DocumentIngestRequest,
     session: Session = Depends(get_session),
 ) -> DocumentIngestResponse:
-    create_db_and_tables()
     try:
         result = ingest_document(
             session,
@@ -36,5 +34,4 @@ def ingest_document_route(
 
 @router.get("", response_model=list[DocumentListItem])
 def list_documents_route(session: Session = Depends(get_session)) -> list[DocumentListItem]:
-    create_db_and_tables()
     return [DocumentListItem(**document.__dict__) for document in list_documents(session)]

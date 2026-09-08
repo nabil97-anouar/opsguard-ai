@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from time import perf_counter
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
@@ -20,8 +20,17 @@ def build_engine(database_url: str | None = None) -> Engine:
         engine_kwargs["connect_args"] = {"check_same_thread": False}
         if resolved_url in {"sqlite://", "sqlite:///:memory:"} or ":memory:" in resolved_url:
             engine_kwargs["poolclass"] = StaticPool
+    elif resolved_url.startswith("postgresql"):
+        engine_kwargs["connect_args"] = {"connect_timeout": 3}
 
-    return create_engine(resolved_url, **engine_kwargs)
+    result = create_engine(resolved_url, **engine_kwargs)
+    if resolved_url.startswith("sqlite"):
+        @event.listens_for(result, "connect")
+        def enable_foreign_keys(connection, _record):
+            cursor = connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+    return result
 
 
 engine = build_engine()

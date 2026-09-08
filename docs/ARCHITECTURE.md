@@ -32,7 +32,7 @@ flowchart TD
     Snapshot --> Reports[Markdown and JSON reports]
 ```
 
-The diagram shows active application components. Qdrant is present in Compose but has no role in ingestion or retrieval.
+The diagram shows active application components. Qdrant and external provider integrations are absent from the runtime and Compose stack.
 
 | Component | Implementation |
 | --- | --- |
@@ -42,7 +42,7 @@ The diagram shows active application components. Qdrant is present in Compose bu
 | Reasoning | Keyword classification, hypothesis/recommendation templates, and confidence arithmetic in [mock_llm.py](../backend/app/agent/mock_llm.py) |
 | Retrieval | SQL document ingestion, character chunking, and lexical ranking in [app/rag](../backend/app/rag) |
 | Tools | Immutable typed registry, local handlers, and run-linked audit records in [app/tools](../backend/app/tools) |
-| Watchdog | Seven deterministic policies and decision aggregation in [app/watchdog](../backend/app/watchdog) |
+| Watchdog | Eight deterministic policies and decision aggregation in [app/watchdog](../backend/app/watchdog) |
 | Harness | Python scenario definitions, execution, scoring, and persistence in [app/harness](../backend/app/harness) |
 | Evaluation | Explicit executed cohorts, raw metric counts, immutable report snapshots, and report rendering in [app/evaluation](../backend/app/evaluation) |
 | Persistence | SQLModel tables and SQLAlchemy sessions in [app/models](../backend/app/models) and [app/db](../backend/app/db) |
@@ -52,8 +52,8 @@ The diagram shows active application components. Qdrant is present in Compose bu
 1. Fixture seeding creates alerts and reference data. `POST /api/v1/agent/runs` starts an investigation for an existing alert ID.
 2. The runner records the alert, classifies it, retrieves document excerpts, and selects tools from a fixed incident-category plan.
 3. Local tools return infrastructure fixtures, search stored incidents/runbooks, or persist a ticket draft. Destructive tool definitions return blocked results.
-4. The reasoning rules assemble hypotheses, an assessment, and a recommendation. Recognized categories receive a local ticket draft at this stage.
-5. The watchdog evaluates the assembled context and annotates the recommendation. The runner ends in `waiting_for_human` with approval `pending`.
+4. The reasoning rules assemble hypotheses, an assessment, and a candidate recommendation with structured proposed actions.
+5. The watchdog evaluates the candidate, persists its typed verdict, and marks it pending review or blocked before creating a correspondingly labeled local ticket. The runner ends in `waiting_for_human` with approval `pending`.
 
 This work occurs synchronously in the API request. Steps, assessments, calls, and findings are committed incrementally. There is no task queue, adaptive agent loop, external reasoning provider, or approval-resume implementation. See [Agent Workflow](AGENT_GRAPH.md) for the exact node sequence and error behavior.
 
@@ -61,7 +61,7 @@ This work occurs synchronously in the API request. Steps, assessments, calls, an
 
 The frontend has a landing route and `/dashboard`. It displays run traces, tool results, retrieved context, watchdog findings, harness results, and evaluation summaries. Alert overview cards describe fixed fixture scenarios; there is no live alert-list API.
 
-[api.ts](../frontend/lib/api.ts) is a handwritten fetch client. [types.ts](../frontend/lib/types.ts) contains corresponding TypeScript types; these are not generated from OpenAPI and do not validate received JSON at runtime. The browser uses [API_BASE_URL](../frontend/lib/config.ts), which defaults to `http://localhost:8000/api/v1`.
+[api.ts](../frontend/lib/api.ts) is a handwritten fetch client. [types.ts](../frontend/lib/types.ts) contains corresponding TypeScript types; these are not generated from OpenAPI and do not validate received JSON at runtime. The browser uses [API_BASE_URL](../frontend/lib/config.ts), which defaults to `http://localhost:8000/api/v1`. This public URL is embedded at build time. Compose passes it as a build argument; changing container runtime variables cannot reconfigure the browser bundle.
 
 The backend exposes its schemas through `/openapi.json` and interactive documentation through `/docs`. See [API Reference](API_SPEC.md) for the implemented route inventory.
 
@@ -71,7 +71,7 @@ Retrieval requires meaningful lexical overlap and resolves trust restrictively a
 
 Agent snapshots preserve source identities, excerpts or structured tool output, trust, and observation timestamps. Final recommendations retain the complete evidence set, and hypothesis references are checked against its run-scoped identifiers. Only successful tool observations with persisted call IDs become evidence. The dashboard reads stored snapshots without fresh retrieval. Confidence and grounding scores remain engineering heuristics, with no claim-level semantic support verification.
 
-Tool execution is constrained by registered handlers rather than prompt instructions. The watchdog inspects context and recommendations using deterministic rules. It does not grant tool authority, and its `block` status does not remove the earlier local ticket draft. Human review is a terminal state, not an authenticated approval service.
+Tool execution is constrained by registered handlers rather than prompt instructions. The watchdog inspects context and recommendations using deterministic rules. It does not grant tool authority, and its `block` status retains a traceable blocked artifact, never a policy-valid recommendation. Human review is a terminal state, not an authenticated approval service.
 
 See [Retrieval and Evidence](RAG_DESIGN.md), [Tool Registry](TOOL_REGISTRY.md), and [Security Boundaries](SECURITY_BOUNDARIES.md) for the current limitations.
 
@@ -87,6 +87,6 @@ PostgreSQL is the default database. SQLite is available through an explicit `DAT
 
 ## Local deployment
 
-[docker-compose.yml](../docker-compose.yml) defines frontend, backend, PostgreSQL, and Qdrant services with persistent database volumes. The backend depends on Qdrant startup in Compose despite not using it in application logic. The Dockerfiles run application processes as non-root users.
+[docker-compose.yml](../docker-compose.yml) defines PostgreSQL, a one-shot initializer, backend and frontend. Database health precedes initialization; backend readiness precedes frontend startup. Runtime images use non-root users and exclude development dependencies. Python dependencies have hash locks; Next.js uses standalone output.
 
-Compose publishes frontend, API, database, and Qdrant ports without restricting them to a loopback address. The API has no authentication, and the backend container listens on `0.0.0.0`. Treat this as a local development configuration and review network exposure before starting it on a shared host. Installation and current startup guidance are in the [README](../README.md).
+Compose publishes frontend, API and PostgreSQL only on loopback. The API remains unauthenticated. `/health` is process liveness; `/ready` checks only SQL connectivity and required schema tables/columns. Neither performs initialization or depends on optional services. Ordinary routes do not issue DDL; the explicit initialization command/setup endpoints apply additive compatibility updates. SQLite connections enable foreign keys. Fixture resets preserve parents referenced outside the reset cohort and atomically delete/reseed fixture records. See [Setup](SETUP.md) and [Data Model](DATA_MODEL.md).

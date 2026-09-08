@@ -65,40 +65,21 @@ Seeding creates clearly labeled fixture history, which cannot satisfy an executi
 
 ## Quick Start
 
-Use the local SQLite setup below. It requires Python 3.11 or newer, Node.js 20 or newer, npm, and curl. Initial dependency installation and frontend font compilation require network access. No model API key is needed.
-
-In a terminal, starting from the repository root:
+Use Python 3.11 and Node 22. From the repository root:
 
 ```bash
-cd backend
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-export ENVIRONMENT=development
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --require-hashes -r backend/requirements-dev.txt
+export PYTHONPATH=backend
 export DATABASE_URL=sqlite:///./opsguard.db
-export BACKEND_CORS_ORIGINS='["http://localhost:3000","http://127.0.0.1:3000"]'
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m app.db.init_db
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-In a second terminal, starting from the repository root:
+In another terminal, run `cd frontend`, `npm ci`, then `npm run dev`. Open `http://localhost:3000`. Use `bash scripts/demo_walkthrough.sh` from the root for the complete local reproduction.
 
-```bash
-cd frontend
-npm ci
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1 npm run dev -- --hostname 127.0.0.1
-```
-
-In a third terminal, initialize the sample dataset:
-
-```bash
-curl --fail-with-body http://localhost:8000/api/v1/db/health
-curl --fail-with-body -X POST http://localhost:8000/api/v1/demo/seed \
-  -H "Content-Type: application/json" \
-  -d '{"reset": false}'
-```
-
-Open the [dashboard](http://localhost:3000). Seeding creates tables and stores the sample records in `backend/opsguard.db`. Keep both servers running.
-
-[Setup and configuration](docs/SETUP.md) covers PostgreSQL, Docker Compose, environment variables, and troubleshooting.
+See [Setup](docs/SETUP.md) for configuration, Compose, readiness and dependency maintenance. The stack uses PostgreSQL, an explicit schema initializer, backend and frontend; no unused integration services run.
 
 ## Example Workflow
 
@@ -117,35 +98,15 @@ Use the running service's [OpenAPI schema](http://localhost:8000/openapi.json) a
 
 ## Development
 
-After installing dependencies, run backend tests from `backend/`:
+[CONTRIBUTING.md](CONTRIBUTING.md) lists the same checks used by [CI](.github/workflows/ci.yml): backend pytest/Ruff/scoped mypy, frontend tests/lint/type checking/build, dependency audits, Markdown links and container builds. CI uses Python 3.11 and Node 22.
 
-```bash
-DATABASE_URL=sqlite:// .venv/bin/python -m pytest tests/ -v
-```
-
-From `frontend/`:
-
-```bash
-npm test
-npm run lint
-npm run typecheck
-npm run build
-```
-
-From the repository root:
-
-```bash
-git diff --check
-docker compose config --quiet
-```
-
-The tests cover local workflow, retrieval, trust boundaries, evidence identity, tools, policies, persistence, harness, and report behavior. Frontend regressions cover historical evidence, exact status mappings, and tool presentation. There is no checked-in CI workflow or browser automation suite.
+Report vulnerabilities using [SECURITY.md](SECURITY.md). A repository license has not yet been selected.
 
 ## Security and Limitations
 
 OpsGuard currently uses deterministic local reasoning for reproducible development and security regression testing. Infrastructure adapters return deterministic local observations and do not execute live Slurm, Docker, network, or system operations. The registry is an internal Python API, not an MCP server.
 
-Human review is currently a terminal workflow state; authenticated approval and post-approval execution are not implemented. The API has no authentication and is intended for local use. Qdrant is present in Compose but is unused by retrieval; external model providers are not implemented.
+Human review is currently a terminal workflow state; authenticated approval and post-approval execution are not implemented. The API has no authentication and is intended for local use. Compose binds published ports to loopback and runs no unused Qdrant service; external model providers are not implemented.
 
 Trust labels do not authenticate sources, and valid evidence references do not establish semantic support for a claim. Audit persistence requires a working database; crashes may leave incomplete invocation checkpoints. Audit rows are not tamper-evident, and fixture resets require care. Pattern screening is limited, and assessment values are uncalibrated. Consult the [security boundaries](docs/SECURITY_BOUNDARIES.md), [retrieval reference](docs/RAG_DESIGN.md), and [evaluation limitations](docs/EVALUATION.md) before extending the system.
 

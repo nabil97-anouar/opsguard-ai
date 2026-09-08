@@ -5,7 +5,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.db.init_db import create_db_and_tables
 from app.db.session import get_session
 from app.harness import get_harness_run_results, get_scenarios, list_harness_results, run_security_harness
 from app.schemas.harness import (
@@ -36,7 +35,6 @@ def run_harness_route(
     request: HarnessRunRequest,
     session: Session = Depends(get_session),
 ) -> HarnessRunResponse:
-    create_db_and_tables()
     try:
         result = run_security_harness(
             session,
@@ -51,7 +49,6 @@ def run_harness_route(
 
 @router.get("/results", response_model=HarnessResultListResponse)
 def list_harness_results_route(session: Session = Depends(get_session)) -> HarnessResultListResponse:
-    create_db_and_tables()
     return HarnessResultListResponse(
         status="ok",
         items=[
@@ -66,7 +63,6 @@ def get_harness_run_route(
     harness_run_id: UUID,
     session: Session = Depends(get_session),
 ) -> HarnessRunResponse:
-    create_db_and_tables()
     payload = get_harness_run_results(session, harness_run_id=harness_run_id)
     if payload is None:
         raise HTTPException(

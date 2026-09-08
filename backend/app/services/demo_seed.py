@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID, uuid5
 
 from sqlalchemy import delete
-from sqlmodel import Session, select
+from sqlmodel import SQLModel, Session, select
 
 from app.db import session as db_session
 from app.db.init_db import create_db_and_tables
@@ -1405,6 +1405,27 @@ def reset_demo_data(session: Session, bundle: DemoSeedBundle) -> None:
 
     session.flush()
 
+    # Keep any fixture parent required by a record outside the reset cohort.
+    # Iterate because retaining a child can require retaining its own parent.
+    candidates = {model.__tablename__: set(ids) for model, ids in bundle.all_ids.items()}
+    changed = True
+    while changed:
+        changed = False
+        for table in SQLModel.metadata.tables.values():
+            for foreign_key in table.foreign_keys:
+                parent = foreign_key.column.table.name
+                parent_ids = candidates.get(parent, set())
+                if not parent_ids:
+                    continue
+                query = select(foreign_key.parent).where(foreign_key.parent.in_(parent_ids))
+                own_ids = candidates.get(table.name, set())
+                if own_ids:
+                    query = query.where(table.c.id.not_in(own_ids))
+                referenced = set(session.exec(query).all())
+                if referenced:
+                    candidates[parent] -= referenced
+                    changed = True
+
     deletion_order = [
         DocumentChunk,
         ToolCall,
@@ -1423,7 +1444,7 @@ def reset_demo_data(session: Session, bundle: DemoSeedBundle) -> None:
     ]
 
     for model in deletion_order:
-        record_ids = bundle.all_ids.get(model, [])
+        record_ids = list(candidates.get(model.__tablename__, set()))
         if model is Alert:
             # Executed runs retain their input alert identity across demo reset.
             referenced = set(session.exec(select(AgentRun.alert_id)).all())
@@ -1431,11 +1452,12 @@ def reset_demo_data(session: Session, bundle: DemoSeedBundle) -> None:
         if record_ids:
             session.exec(delete(model).where(model.id.in_(record_ids)))
 
-    session.commit()
+    session.flush()
 
 
-def seed_demo_data(*, reset: bool = False) -> dict[str, dict[str, int] | str]:
-    create_db_and_tables()
+def seed_demo_data(*, reset: bool = False, initialize: bool = True) -> dict[str, dict[str, int] | str]:
+    if initialize:
+        create_db_and_tables()
     summary = blank_summary()
     bundle = build_demo_bundle()
 

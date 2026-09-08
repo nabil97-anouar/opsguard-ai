@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.agent.actions import ProposedAction, RecommendationState
+
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -71,7 +73,6 @@ class AgentAssessmentResponse(SchemaModel):
     overridden_by_policy: bool = False
 
 
-from app.agent.actions import ProposedAction, RecommendationState
 
 
 class FinalRecommendationResponse(SchemaModel):

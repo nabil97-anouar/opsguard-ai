@@ -11,7 +11,6 @@ from app.agent.runner import (
     list_agent_runs as list_recent_agent_runs,
     run_agent_for_alert,
 )
-from app.db.init_db import create_db_and_tables
 from app.db.session import get_session
 from app.schemas.agent_run import (
     AgentAssessmentResponse,
@@ -33,7 +32,6 @@ def create_agent_run_route(
     request: AgentRunCreateRequest,
     session: Session = Depends(get_session),
 ) -> AgentRunResponse:
-    create_db_and_tables()
     try:
         result = run_agent_for_alert(session, alert_id=request.alert_id)
     except ValueError as exc:
@@ -63,7 +61,6 @@ def create_agent_run_route(
 
 @router.get("/runs/{agent_run_id}", response_model=AgentRunDetailResponse)
 def get_agent_run_route(agent_run_id: UUID, session: Session = Depends(get_session)) -> AgentRunDetailResponse:
-    create_db_and_tables()
     payload = get_agent_run_detail(session, agent_run_id=agent_run_id)
     if payload is None:
         raise HTTPException(
@@ -110,7 +107,6 @@ def get_agent_run_route(agent_run_id: UUID, session: Session = Depends(get_sessi
 
 @router.get("/runs", response_model=AgentRunListResponse)
 def list_agent_runs_route(session: Session = Depends(get_session)) -> AgentRunListResponse:
-    create_db_and_tables()
     runs = list_recent_agent_runs(session)
     return AgentRunListResponse(
         status="ok",

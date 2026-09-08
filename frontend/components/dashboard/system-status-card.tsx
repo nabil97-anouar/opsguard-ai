@@ -26,9 +26,9 @@ const systemRows = [
     value: (health: HealthPayload | null) => health?.environment ?? "local"
   },
   {
-    label: "LLM provider",
+    label: "Reasoner",
     icon: Database,
-    value: (health: HealthPayload | null) => health?.dependencies.llm_provider ?? "mock"
+    value: (health: HealthPayload | null) => health?.reasoner ?? "mock"
   }
 ];
 

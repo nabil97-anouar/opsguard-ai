@@ -69,6 +69,6 @@ The runtime `evidence_grounding_score` is the fraction of evidence items labeled
 
 ## Storage and scope
 
-[Document and DocumentChunk](../backend/app/models/document.py) are SQL tables. Retrieval does not use embeddings, Qdrant, BM25, reciprocal-rank fusion, or a reranker. The Qdrant service in Compose is unused by this pipeline.
+[Document and DocumentChunk](../backend/app/models/document.py) are SQL tables. Retrieval does not use embeddings, Qdrant, BM25, reciprocal-rank fusion, or a reranker. Compose does not start Qdrant because this pipeline does not use it.
 
 See [Agent Workflow](AGENT_GRAPH.md), [Tool Registry](TOOL_REGISTRY.md), and [API Reference](API_SPEC.md).

@@ -30,7 +30,6 @@ from app.tools.implementations import (
     RetrieveRunbookOutput,
     SearchLogsInput,
     SearchLogsOutput,
-    blocked_tool_handler,
     check_network_connections_handler,
     create_ticket_draft_handler,
     get_node_metrics_handler,

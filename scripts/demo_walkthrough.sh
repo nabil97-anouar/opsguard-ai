@@ -2,8 +2,11 @@
 
 set -euo pipefail
 
-BASE_URL="http://localhost:8000"
-API_URL="${BASE_URL}/api/v1"
+BASE_URL="${BASE_URL:-http://localhost:8000}"
+API_URL="${API_URL:-${BASE_URL}/api/v1}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+command -v python3 >/dev/null || { printf "python3 is required.\n" >&2; exit 1; }
+trap 'printf "Walkthrough failed at line %s. Check the preceding API error.\n" "$LINENO" >&2' ERR
 GPU_ALERT_ID="909d28d2-5c9f-5fa2-a35e-f6b39c95f83f"
 PROMPT_ALERT_ID="e3e0e0d5-9e19-5243-a1f0-76c507be3641"
 
@@ -20,7 +23,7 @@ pretty_json() {
   fi
 
   if command -v python3 >/dev/null 2>&1; then
-    python3 -m json.tool 2>/dev/null || cat
+    python3 -m json.tool
     return
   fi
 
@@ -28,27 +31,16 @@ pretty_json() {
 }
 
 json_field() {
-  local path="$1"
+  python3 "${SCRIPT_DIR}/json_field.py" "$1"
+}
 
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$path" <<'PY'
-import json
-import sys
-
-path = sys.argv[1].split(".")
-data = json.load(sys.stdin)
-value = data
-for part in path:
-    if part.isdigit():
-        value = value[int(part)]
-    else:
-        value = value.get(part)
-print("" if value is None else value)
-PY
-    return
+require_field() {
+  local actual
+  actual="$(printf '%s\n' "$1" | json_field "$2")"
+  if [[ "$actual" != "$3" ]]; then
+    printf 'Unexpected %s: %s (expected %s). Inspect the response above.\n' "$2" "$actual" "$3" >&2
+    exit 1
   fi
-
-  printf ''
 }
 
 request_json() {
@@ -57,26 +49,24 @@ request_json() {
   local body="${3:-}"
 
   if [[ -n "$body" ]]; then
-    curl -fsS -X "$method" "${API_URL}${path}" \
+    curl --connect-timeout 5 --max-time 120 -fsS -X "$method" "${API_URL}${path}" \
       -H "Content-Type: application/json" \
       -d "$body"
     return
   fi
 
-  curl -fsS -X "$method" "${API_URL}${path}"
+  curl --connect-timeout 5 --max-time 120 -fsS -X "$method" "${API_URL}${path}"
 }
 
 print_header "OpsGuard AI Demo Walkthrough"
 printf 'Base URL: %s\n' "$BASE_URL"
 printf 'This script is local-only, deterministic, and never executes infrastructure actions.\n'
 
-print_header "1. Backend health"
-health_payload="$(request_json GET "/health")" || {
-  printf 'Backend health check failed.\n'
+print_header "1. Backend readiness"
+health_payload="$(request_json GET "/ready")" || {
+  printf 'Backend readiness check failed.\n'
   printf 'Start the backend first:\n'
-  printf '  cd backend\n'
-  printf '  source .venv/bin/activate\n'
-  printf '  uvicorn app.main:app --reload --host 0.0.0.0 --port 8000\n'
+  printf 'Follow docs/SETUP.md with the same DATABASE_URL; initialize the schema before starting the server.\n'
   exit 1
 }
 printf '%s\n' "$health_payload" | pretty_json
@@ -88,6 +78,7 @@ printf '%s\n' "$seed_payload" | pretty_json
 print_header "3. Run GPU abuse agent scenario"
 gpu_run_payload="$(request_json POST "/agent/runs" "{\"alert_id\":\"${GPU_ALERT_ID}\"}")"
 printf '%s\n' "$gpu_run_payload" | pretty_json
+require_field "$gpu_run_payload" "status" "waiting_for_human"
 gpu_run_id="$(printf '%s\n' "$gpu_run_payload" | json_field "agent_run_id")"
 if [[ -n "$gpu_run_id" ]]; then
   print_header "3a. GPU agent run detail"
@@ -97,6 +88,7 @@ fi
 print_header "4. Run prompt-injection agent scenario"
 prompt_run_payload="$(request_json POST "/agent/runs" "{\"alert_id\":\"${PROMPT_ALERT_ID}\"}")"
 printf '%s\n' "$prompt_run_payload" | pretty_json
+require_field "$prompt_run_payload" "status" "waiting_for_human"
 prompt_run_id="$(printf '%s\n' "$prompt_run_payload" | json_field "agent_run_id")"
 if [[ -n "$prompt_run_id" ]]; then
   print_header "4a. Prompt-injection run detail"
@@ -104,15 +96,21 @@ if [[ -n "$prompt_run_id" ]]; then
 fi
 
 print_header "5. Run security harness"
-harness_payload="$(request_json POST "/harness/run" '{"scenario_ids": null, "reset_demo_data": true}')"
+harness_payload="$(request_json POST "/harness/run" '{"scenario_ids": null, "reset_demo_data": false}')"
 printf '%s\n' "$harness_payload" | pretty_json
 
+require_field "$harness_payload" "status" "completed"
+require_field "$harness_payload" "failed" "0"
+require_field "$harness_payload" "partial" "0"
+
 print_header "6. Run evaluation"
-evaluation_payload="$(request_json POST "/evaluation/run" '{"run_harness_if_empty": true, "report_type": "full"}')"
+harness_run_id="$(printf '%s\n' "$harness_payload" | json_field "harness_run_id")"
+evaluation_payload="$(request_json POST "/evaluation/run" "{\"harness_run_id\":\"${harness_run_id}\",\"run_harness_if_empty\":false}")"
 printf '%s\n' "$evaluation_payload" | pretty_json
 
-print_header "7. Fetch Markdown safety report"
-curl -fsS "${API_URL}/evaluation/report.md"
+evaluation_id="$(printf '%s\n' "$evaluation_payload" | json_field "evaluation_run_id")"
+print_header "7. Fetch stored Markdown evaluation report"
+curl --connect-timeout 5 --max-time 120 -fsS "${API_URL}/evaluation/report.md?evaluation_run_id=${evaluation_id}"
 
 print_header "Demo complete"
 printf 'Stable alert IDs used:\n'

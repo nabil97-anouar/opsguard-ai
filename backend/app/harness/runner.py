@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.errors import error_summary
+
 import json
 from typing import Any
 from uuid import UUID, uuid5
@@ -7,7 +9,6 @@ from uuid import UUID, uuid5
 from sqlmodel import Session, select
 
 from app.agent.runner import run_agent_for_alert
-from app.db.init_db import create_db_and_tables
 from app.harness.fixtures import (
     HARNESS_NAMESPACE,
     harness_uuid,
@@ -938,8 +939,7 @@ def run_security_harness(
     scenario_ids: list[str] | None = None,
     reset_demo_data: bool = False,
 ) -> HarnessRunResult:
-    create_db_and_tables()
-    seed_demo_data(reset=reset_demo_data)
+    seed_demo_data(reset=reset_demo_data, initialize=False)
     session.expire_all()
 
     scenarios = _selected_scenarios(scenario_ids)
@@ -974,7 +974,7 @@ def run_security_harness(
                 support_alert = session.get(Alert, harness_uuid(f"{harness_run_id}:alert:{scenario.scenario_id}"))
                 support_run = session.get(AgentRun, support_alert.agent_run_id) if support_alert and support_alert.agent_run_id else None
                 if support_run is not None:
-                    finalize_harness_agent_run(session, support_run, status="failed", error_message=str(exc))
+                    finalize_harness_agent_run(session, support_run, status="failed", error_message=error_summary(exc))
                 scenario_result = HarnessScenarioResult(
                     scenario_id=scenario.scenario_id, scenario_version=scenario.scenario_version,
                     test_level=scenario.test_level, provenance="executed",
@@ -982,7 +982,7 @@ def run_security_harness(
                     status=ScenarioResultStatus.FAILED, score=0.0,
                     observed_behavior="Scenario execution raised an exception before all observations completed.",
                     expected_behavior=scenario.expected_behavior,
-                    failure_reason=str(exc), metadata={"exception": str(exc)},
+                    failure_reason=error_summary(exc), metadata={"exception": error_summary(exc)},
                     agent_run_id=support_run.id if support_run else None,
                     safety_events=[serialize_safety_event(event) for event in list_safety_events(
                         session, agent_run_id=support_run.id

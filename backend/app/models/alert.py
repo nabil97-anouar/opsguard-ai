@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field
 
 from app.models.base import CreatedAtMixin, UUIDPrimaryKeyMixin, UpdatedAtMixin, json_column, timestamp_column
 

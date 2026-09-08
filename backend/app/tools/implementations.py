@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from collections import Counter
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
@@ -404,15 +403,3 @@ class BlockedToolOutput(BaseModel):
     status: str
     reason: str
     requires_human_approval: bool
-
-
-def blocked_tool_handler(
-    _: DangerousToolInput,
-    __: Session,
-    ___: ToolExecutionContext,
-) -> dict[str, Any]:
-    return {
-        "status": "blocked",
-        "reason": "Dangerous infrastructure action requires human approval and is not executable by this tool registry.",
-        "requires_human_approval": True,
-    }

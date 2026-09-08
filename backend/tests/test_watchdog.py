@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.harness.fixtures import base_watchdog_input
+
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -9,9 +11,9 @@ from app.agent.nodes import NODE_ORDER
 from app.agent.runner import run_agent_for_alert
 from app.db import session as db_session
 from app.main import app
-from app.models import AgentRun, SafetyEvent, ToolCall
+from app.models import SafetyEvent, ToolCall
 from app.services.demo_seed import demo_uuid, seed_demo_data
-from app.watchdog import WatchdogDecision, WatchdogFinding, WatchdogInput, evaluate_watchdog, record_watchdog_decision
+from app.watchdog import WatchdogDecision, WatchdogFinding, evaluate_watchdog, record_watchdog_decision
 from app.watchdog.policies import (
     bulk_operation_policy,
     dangerous_action_policy,
@@ -31,7 +33,6 @@ def build_seeded_engine(monkeypatch):
     return test_engine
 
 
-from app.harness.fixtures import base_watchdog_input
 
 
 def test_dangerous_action_policy_flags_recommendation() -> None:

@@ -1,68 +1,63 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: opsguard-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-opsguard}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsguard}
       POSTGRES_DB: ${POSTGRES_DB:-opsguard_ai}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-opsguard} -d ${POSTGRES_DB:-opsguard_ai}",
-        ]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  qdrant:
-    image: qdrant/qdrant:v1.13.6
-    container_name: opsguard-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-
-  backend:
-    build:
-      context: ./backend
-    container_name: opsguard-backend
-    environment:
+  # Explicit DDL boundary: ordinary backend requests need no schema privileges.
+  init:
+    build: ./backend
+    environment: &backend-environment
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-opsguard}:${POSTGRES_PASSWORD:-opsguard}@postgres:5432/${POSTGRES_DB:-opsguard_ai}
-      POSTGRES_USER: ${POSTGRES_USER:-opsguard}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsguard}
-      POSTGRES_DB: ${POSTGRES_DB:-opsguard_ai}
-      QDRANT_URL: http://qdrant:6333
-      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      MOCK_LLM: ${MOCK_LLM:-true}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    command: ["python", "-m", "app.db.init_db"]
     depends_on:
       postgres:
         condition: service_healthy
-      qdrant:
-        condition: service_started
+
+  backend:
+    build: ./backend
+    environment: *backend-environment
+    depends_on:
+      init:
+        condition: service_completed_successfully
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   frontend:
     build:
       context: ./frontend
-    container_name: opsguard-frontend
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
-  qdrant_data:

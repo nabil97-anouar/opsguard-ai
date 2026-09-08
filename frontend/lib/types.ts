@@ -6,11 +6,8 @@ export type HealthPayload = {
   status: "healthy";
   version: string;
   environment: string;
-  dependencies: {
-    postgres: string;
-    qdrant: string;
-    llm_provider: string;
-  };
+  check: "liveness";
+  reasoner: "deterministic-mock-v2";
   timestamp: string;
 };
 

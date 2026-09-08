@@ -57,21 +57,19 @@ The seed contains prewritten results labeled `fixture`. They cannot satisfy an e
 
 The seed operation upserts a fixed set of records; it can update sample history even with `reset: false`. The harness also reseeds data. Its default `reset_demo_data` is `false`, preserving existing history and Milestone 1 trust demotions.
 
-Explicit reset recreates fixed fixture history and can conflict with dependent historical records under foreign-key enforcement. Use a disposable database for reset experiments. Normal evaluation and harness requests do not need a reset.
+Explicit reset recreates fixture records while retaining parents referenced by non-reset records. Foreign keys are enforced; deletion and reseeding commit atomically. Retained fixture parents may still be updated by the normal fixture upsert. Use a disposable database for reset experiments. Normal evaluation and harness requests do not need a reset.
 
 The automated [integrity reproduction](../scripts/verify_evaluation_integrity.py) uses a disposable SQLite database to seed fixtures, execute a real harness, evaluate that ID, export both formats, perform unrelated agent activity, and verify that the stored exports remain byte-for-byte unchanged.
 
-## Existing shell helper
+## Shell walkthrough
 
-[scripts/demo_walkthrough.sh](../scripts/demo_walkthrough.sh) sequences similar operations, but currently has a known input-parsing defect: `json_field` supplies Python code and JSON through the same stdin stream. When Python is available, it fails while extracting the first run ID. Its harness request also enables reset.
-
-Use the explicit requests above until the helper's parsing and reset handling are corrected.
+Run `bash scripts/demo_walkthrough.sh` from the repository root after explicit schema initialization and server startup. The helper checks readiness, reads JSON through [json_field.py](../scripts/json_field.py) without sharing stdin with Python source, preserves existing activity, evaluates the returned harness ID, and exports the matching stored report. Curl/python3 are required; jq is optional. `BASE_URL` or `API_URL` can select another local address. HTTP and extraction errors stop the script with a clear message.
 
 ## Troubleshooting
 
-- **Connection refused:** confirm the backend is running and check `/api/v1/db/health`.
+- **Connection refused:** confirm the backend is running and check `/api/v1/ready`.
 - **Database connection error:** keep `DATABASE_URL` set in the server terminal; the default configuration targets PostgreSQL.
-- **CORS settings error:** use the JSON-array environment value in the Quick Start.
+- **CORS settings error:** use a JSON array or comma-separated explicit HTTP(S) origins; see [Setup](SETUP.md).
 - **Missing alert:** seed the same database used by the running backend.
 - **Failed run:** inspect the run detail's `error_message` and failed step, rather than treating HTTP success as workflow success.
 - **Stale evaluation:** report endpoints prefer the latest stored evaluation snapshot. Run evaluation explicitly to create a new snapshot.

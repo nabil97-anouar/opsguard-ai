@@ -11,5 +11,5 @@ def test_health_endpoint_returns_ok() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "healthy"
-    assert payload["dependencies"]["postgres"] == "configured"
-    assert payload["dependencies"]["qdrant"] == "configured"
+    assert payload["check"] == "liveness"
+    assert "dependencies" not in payload

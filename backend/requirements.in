@@ -1,0 +1,9 @@
+# Runtime dependencies. Regenerate locks using the commands in docs/SETUP.md.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic-settings==2.15.0
+sqlmodel==0.0.42
+psycopg[binary]==3.3.5
+python-json-logger==3.3.0
+# SQLAlchemy requires this on Linux; lock it explicitly when generating on macOS.
+greenlet==3.5.5

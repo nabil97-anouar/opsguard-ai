@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.db import session as db_session
+from app.db.init_db import create_db_and_tables
 from app.harness import get_scenarios, run_security_harness
 from app.main import app
 from app.models import AgentRun, SafetyEvent, SecurityHarnessResult, SecurityHarnessRun, SecurityHarnessTest
@@ -17,6 +18,7 @@ from app.models import AgentRun, SafetyEvent, SecurityHarnessResult, SecurityHar
 def build_seeded_engine(monkeypatch):
     test_engine = db_session.build_engine("sqlite://")
     monkeypatch.setattr(db_session, "engine", test_engine)
+    create_db_and_tables(test_engine)
     return test_engine
 
 

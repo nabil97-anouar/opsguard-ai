@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.errors import error_summary
+
 from copy import deepcopy
 from datetime import UTC, datetime
 import json
@@ -135,18 +137,18 @@ def _run_node(
         completed_at = utcnow()
         step.status = "failed"
         step.duration_ms = int(round((perf_counter() - started_perf) * 1000))
-        step.error = str(exc)
+        step.error = error_summary(exc)
         step.output_snapshot = {
             "completed_at": completed_at.isoformat(),
-            "error": str(exc),
+            "error": error_summary(exc),
         }
-        agent_run.error_message = str(exc)
+        agent_run.error_message = error_summary(exc)
         session.add(step)
         session.add(agent_run)
         session.commit()
         session.refresh(step)
         state.steps.append(_to_step_summary(step).model_dump(mode="json"))
-        state.errors.append(str(exc))
+        state.errors.append(error_summary(exc))
         state.status = "failed"
         raise
 

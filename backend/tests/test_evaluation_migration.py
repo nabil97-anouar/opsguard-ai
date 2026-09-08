@@ -51,6 +51,7 @@ def test_reset_with_foreign_keys_preserves_executed_input_alert(monkeypatch):
     from app.harness import run_security_harness
     engine = db_session.build_engine("sqlite://")
     monkeypatch.setattr(db_session, "engine", engine)
+    create_db_and_tables(engine)
     with engine.begin() as connection:
         connection.execute(text("PRAGMA foreign_keys=ON"))
     with Session(engine) as session:

@@ -36,7 +36,7 @@ from app.schemas.harness import (
     SecurityHarnessResultRead,
     SecurityHarnessTestRead,
 )
-from app.schemas.health import DependencyHealth, HealthResponse
+from app.schemas.health import ReadinessResponse, HealthResponse
 from app.schemas.kill_chain import KillChainMappingRead
 from app.schemas.rag import (
     DocumentIngestRequest,
@@ -79,7 +79,7 @@ __all__ = [
     "DemoSeedRequest",
     "DemoSeedResponse",
     "DemoSeedSummary",
-    "DependencyHealth",
+    "ReadinessResponse",
     "DocumentChunkRead",
     "DocumentIngestRequest",
     "DocumentIngestResponse",

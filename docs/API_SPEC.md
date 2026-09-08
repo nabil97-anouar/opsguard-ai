@@ -10,7 +10,7 @@ The API has no authentication or per-user authorization. Use it in a trusted loc
 
 Agent, harness, and evaluation requests execute synchronously; they do not return background-job handles. A successful HTTP response can contain an application-level `failed` or `blocked` outcome. Check the response status, step errors, and watchdog findings.
 
-Many data endpoints call table creation before accessing records. `GET /health` reports application/configuration state; `GET /db/health` actually tests the SQL connection.
+Ordinary data endpoints never create or alter tables. Run `python -m app.db.init_db` explicitly before serving requests; the development create-table/seed endpoints are also explicit setup operations. `GET /health` checks liveness, `/ready` checks SQL connectivity and schema readiness, and `/db/health` remains a connectivity-only probe.
 
 ## Endpoint inventory
 
@@ -18,7 +18,8 @@ All paths below are relative to `/api/v1`.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/health` | Application version, environment, and configured dependency labels |
+| GET | `/health` | Liveness only: version, environment, deterministic reasoner, timestamp; no dependency checks |
+| GET | `/ready` | SQL connection plus required tables/columns; 200 ready or 503 unavailable/schema missing; no DDL |
 | GET | `/db/health` | Database connectivity and latency |
 | POST | `/db/create-tables` | Create missing SQL tables; explicit endpoint disabled when `ENVIRONMENT=production` |
 | POST | `/demo/seed` | Seed fixture data; explicit endpoint disabled when `ENVIRONMENT=production` |
@@ -184,6 +185,6 @@ Use `?evaluation_run_id=UUID` on both report exports to select the same stored s
 
 ## Errors and schema sources
 
-FastAPI rejects malformed typed request fields with HTTP 422. Missing agent/alert/harness resources and unknown tool names return 404; invalid ingestion content or harness selection can return 400. Database health failures return 503. Some internal failures surface as server errors or application-level failed results.
+FastAPI rejects malformed typed request fields with HTTP 422. Missing agent/alert/harness resources and unknown tool names return 404; invalid ingestion content or harness selection can return 400. Database health failures return 503. Unhandled HTTP failures return a generic 500 with a generated `request_id`, also exposed as `X-Request-ID` on every response. Logs record the exception class and correlation ID without exception text or request bodies. Database probe errors never expose connection strings. Workflow failures may still be represented as application-level failed results.
 
 Request and response schemas live in [app/schemas](../backend/app/schemas). Detailed contracts are defined by [agent_run.py](../backend/app/schemas/agent_run.py), [rag.py](../backend/app/schemas/rag.py), [tools.py](../backend/app/schemas/tools.py), [watchdog.py](../backend/app/schemas/watchdog.py), [harness.py](../backend/app/schemas/harness.py), and [evaluation.py](../backend/app/schemas/evaluation.py).
