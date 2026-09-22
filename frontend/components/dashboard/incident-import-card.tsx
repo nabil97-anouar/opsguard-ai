@@ -78,12 +78,13 @@ export function IncidentImportCard({ imported, runtime, disabled, backendAvailab
     <div className="incident-examples"><span>Start from a synthetic example:</span><a href="/examples/incidents/normal-workload.json" download>Normal workload ↓</a><a href="/examples/incidents/suspicious-activity.json" download>Suspicious activity ↓</a></div>
     <div className="incident-import-grid">
       <div className="incident-file-stage">
-        <label htmlFor="incident-json-file"><span className="import-stage-number">01</span> Select, convert, and import</label>
+        <label htmlFor="incident-json-file"><span className="import-stage-number">01</span> Select and convert locally</label>
         <input id="incident-json-file" type="file" accept={INCIDENT_FILE_ACCEPT} disabled={disabled || reading} onChange={(event) => void chooseFile(event.target.files?.[0])} />
         {reading ? <p className="mt-3 text-xs text-slate-400" role="status">Converting the selected file locally…</p> : null}
         {bundle && prepared ? <div className="incident-file-preview">
           <p><FileJson size={13} /> {fileName}</p>
           <p role="status">{prepared.converted ? `Converted automatically from ${prepared.format.toUpperCase()} to incident JSON.` : "Incident JSON is ready to import."}</p>
+          {!imported ? <p className="incident-data-notice"><strong>Conversion complete.</strong> Nothing has been saved or investigated yet. Review the JSON, then continue with step 02.</p> : null}
           {prepared.summary ? <p className="text-xs text-slate-300">{prepared.summary.source_line_count} source lines → {prepared.summary.observation_count} evidence chunks{prepared.summary.recognized_journal_lines > 0 ? ` · ${prepared.summary.recognized_journal_lines} journal lines recognized` : ""}. Chunks preserve file text; they are not separate incidents.</p> : null}
           <strong>{bundle.incident.title}</strong>
           <dl><div><dt>Source label</dt><dd>{bundle.incident.source}</dd></div><div><dt>Host/node</dt><dd>{bundle.incident.node ?? "Unknown"}</dd></div><div><dt>Event time</dt><dd>{bundle.incident.observed_at ?? (prepared.summary && prepared.summary.recognized_journal_lines > 0 ? "See source timestamps and conversion notes" : "Not provided")}</dd></div><div><dt>{isConvertedText ? "Evidence chunks" : "Observations"}</dt><dd>{bundle.observations.length}</dd></div><div><dt>Incident severity{prepared.converted ? " (conversion default)" : ""}</dt><dd>{bundle.incident.severity}</dd></div></dl>
@@ -93,11 +94,12 @@ export function IncidentImportCard({ imported, runtime, disabled, backendAvailab
         </div> : null}
         {error ? <p className="incident-import-error" role="alert">{error}</p> : null}
         {!backendAvailable ? <p className="mt-3 text-xs leading-5 text-slate-400">You can convert and download locally. Start the backend to import and investigate.</p> : null}
-        <Button className="mt-4" disabled={disabled || reading || !bundle || !backendAvailable || imported !== null} onClick={() => void importSelected()} variant="secondary">{isImporting ? <LoaderCircle size={14} className="mr-2 animate-spin" /> : <Upload size={14} className="mr-2" />}{isImporting ? "Importing…" : "Import incident"}</Button>
+        <p className="import-stage-label mt-4"><span className="import-stage-number">02</span> Save evidence to OpsGuard</p>
+        <Button className="mt-3" disabled={disabled || reading || !bundle || !backendAvailable || imported !== null} onClick={() => void importSelected()} variant="secondary">{isImporting ? <LoaderCircle size={14} className="mr-2 animate-spin" /> : <Upload size={14} className="mr-2" />}{isImporting ? "Saving evidence…" : imported ? "Evidence saved" : "Save evidence"}</Button>
       </div>
-      <div className="incident-run-stage"><p className="import-stage-label"><span className="import-stage-number">02</span> Review destination and run</p><p className="incident-data-notice">{incidentDataDestination(runtime)}</p>
-        {imported ? <div className="imported-receipt"><div className="flex flex-wrap items-center gap-2"><SafetyBadge value={imported.receipt.trust_level} /><span>{imported.receipt.observation_count} evidence entries stored</span></div><strong>{imported.bundle.incident.title}</strong><p>Bundle {imported.receipt.bundle_id}</p><p>Alert {imported.receipt.alert_id}</p><p>Imported {imported.receipt.imported_at}</p></div> : <p className="mt-4 text-xs leading-6 text-slate-400">Import an incident first. A separate Run investigation action authorizes reasoning with the selected provider.</p>}
-        <Button className="mt-4" disabled={disabled || !backendAvailable || !imported || !runtime?.available} onClick={() => void onRun()}>{isRunning ? <LoaderCircle size={14} className="mr-2 animate-spin" /> : <ArrowRight size={14} className="mr-2" />}{isRunning ? "Investigating…" : "Run imported investigation"}</Button>
+      <div className="incident-run-stage"><p className="import-stage-label"><span className="import-stage-number">03</span> Run the investigation</p><p className="incident-data-notice">{incidentDataDestination(runtime)}</p>
+        {imported ? <div className="imported-receipt"><div className="flex flex-wrap items-center gap-2"><SafetyBadge value={imported.receipt.trust_level} /><span>{imported.receipt.observation_count} evidence entries stored</span></div><strong>Evidence saved. Reasoning has not run yet.</strong><p>{imported.bundle.incident.title}</p><p>Bundle {imported.receipt.bundle_id}</p><p>Alert {imported.receipt.alert_id}</p><p>Imported {imported.receipt.imported_at}</p></div> : <p className="mt-4 text-xs leading-6 text-slate-400">Complete step 02 first. Saving evidence and running reasoning are separate so you can verify the destination before any model request.</p>}
+        <Button className="mt-4" disabled={disabled || !backendAvailable || !imported || !runtime?.available} onClick={() => void onRun()}>{isRunning ? <LoaderCircle size={14} className="mr-2 animate-spin" /> : <ArrowRight size={14} className="mr-2" />}{isRunning ? "Investigating…" : "Run investigation"}</Button>
       </div>
     </div>
   </Card>;

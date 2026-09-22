@@ -10,7 +10,7 @@ Privately include the affected commit, a minimal reproduction using synthetic da
 
 ## Scope and limits
 
-OpsGuard defaults to deterministic reasoning and local fixture adapters. Optional OpenAI and institutional reasoning sends investigation context to the configured external service. It has no authentication, tenant isolation, infrastructure control, or approve/reject/resume workflow. Run the unauthenticated API within a trusted local boundary. Compose publishes services on loopback. Policy checks and regression tests do not establish general model-level injection resistance or semantic correctness.
+OpsGuard defaults to deterministic reasoning and local fixture adapters. Optional remote reasoning sends investigation context to the configured external service. It has no authentication, tenant isolation, infrastructure control, or approve/reject/resume workflow. Run the unauthenticated API within a trusted local boundary. Compose publishes services on loopback. Policy checks and regression tests do not establish general model-level injection resistance or semantic correctness.
 
 Evidence and audit history are ordinary SQL records, not tamper-evident storage. Dependency checks cover known package advisories, not all application vulnerabilities. See [Security Boundaries](docs/SECURITY_BOUNDARIES.md).
 

@@ -53,8 +53,11 @@ def test_only_supported_provider_settings_are_present(monkeypatch):
     example = ROOT.joinpath(".env.example").read_text()
     assert "QDRANT" not in example and "SECRET_KEY" not in example
     assignments = dict(line.split("=", 1) for line in example.splitlines() if line and not line.startswith("#") and "=" in line)
-    for key in ("OPENAI_API_KEY", "INSTITUTIONAL_LLM_API_KEY", "ANTHROPIC_API_KEY", "OLLAMA_API_KEY"):
+    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OLLAMA_API_KEY"):
         assert assignments[key] == "", f"{key} must be blank in the committed example"
+    assert not any(key.startswith("INSTITUTIONAL_LLM_") for key in assignments), (
+        "compatible-endpoint configuration is intentionally documented outside the committed example"
+    )
 
 
 def test_direct_runtime_dependency_versions_are_present_in_both_hash_locks():

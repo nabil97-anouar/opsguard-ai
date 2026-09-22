@@ -78,19 +78,24 @@ test("failed import never starts an investigation and validation output cannot e
 
 test("run is disabled before import, and external destination is disclosed before a separate explicit run", () => {
   const before = render(IncidentImportCard, cardProps);
-  const runButton = before.match(/<button[^>]*>.*?Run imported investigation<\/button>/g)?.at(-1);
+  const runButton = before.match(/<button[^>]*>.*?Run investigation<\/button>/g)?.at(-1);
   assert.ok(runButton);
   assert.match(runButton, /disabled=""/);
   assert.match(before, /Import alone does not call the model/);
-  assert.match(before, /Institutional \/ gpt-oss-120b/);
+  assert.match(before, /Compatible API \/ gpt-oss-120b/);
   assert.match(before, /input[^>]*type="file"[^>]*accept="\.json,\.jsonl,\.ndjson,\.csv,\.txt,\.log,\.md,\.markdown,text\/plain,application\/json,text\/csv"/);
   assert.match(before, /synthetic example/);
   assert.match(before, /converts it to incident JSON in your browser/);
   assert.match(before, /No model is used for conversion/);
+  assert.match(before, /01<\/span> Select and convert locally/);
+  assert.match(before, /02<\/span> Save evidence to OpsGuard/);
+  assert.match(before, /03<\/span> Run the investigation/);
+  assert.match(before, /Complete step 02 first/);
   const after = render(IncidentImportCard, { ...cardProps, imported: { bundle, receipt } });
   assert.match(after, /bundle-original/);
   assert.match(after, /alert-original/);
   assert.match(after, />Untrusted</);
+  assert.match(after, /Evidence saved\. Reasoning has not run yet\./);
   const buttons = after.match(/<button\b[^>]*>.*?<\/button>/g);
   assert.doesNotMatch(buttons.at(-1), /disabled=/);
 });
@@ -160,7 +165,7 @@ test("imported historical title comes from its saved alert snapshot", () => {
 });
 
 test("provider labels are exact and local Ollama is never confused with deterministic or verified inference", () => {
-  const cases = [["deterministic", "Deterministic", "local"], ["openai", "OpenAI", "external"], ["institutional", "Institutional", "external"], ["anthropic", "Claude / Anthropic", "external"], ["ollama", "Ollama", "local"]];
+  const cases = [["deterministic", "Deterministic", "local"], ["openai", "OpenAI", "external"], ["institutional", "Compatible API", "external"], ["anthropic", "Claude / Anthropic", "external"], ["ollama", "Ollama", "local"]];
   for (const [provider, expected, mode] of cases) {
     assert.equal(providerLabel(provider), expected);
     const runtime = { provider, model: "selected-model", mode, configured: true, available: true, connectivity: provider === "deterministic" ? "local" : "not_checked" };
@@ -182,7 +187,7 @@ test("sample launches require explicit seeding and imported investigation is the
   const handler = source.slice(source.indexOf("async function handleRunScenario"), source.indexOf("async function handleImportIncident"));
   assert.doesNotMatch(handler, /seedDemoData\(/);
   assert.match(handler, /Select Seed sample data explicitly/);
-  assert.match(source, /Import incident evidence/);
+  assert.match(source, /Investigate incident evidence/);
 });
 
 test("downloadable synthetic examples match the backend-validated repository examples", () => {

@@ -64,7 +64,7 @@ export function providerLabel(provider: string | null | undefined): string {
   switch (provider) {
     case "deterministic": return "Deterministic";
     case "openai": return "OpenAI";
-    case "institutional": return "Institutional";
+    case "institutional": return "Compatible API";
     case "anthropic": return "Claude / Anthropic";
     case "ollama": return "Ollama";
     default: return "Unavailable";

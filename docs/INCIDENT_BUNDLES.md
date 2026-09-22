@@ -6,7 +6,7 @@ Importing only stores the data. Starting an investigation runs the configured re
 
 ## Files and automatic conversion
 
-The file picker accepts `.log`, `.txt`, `.md`, `.csv`, `.jsonl`, `.ndjson`, and `.json`. Conversion runs entirely in the browser, without a model request or uploading the file. It also works while the backend is disconnected. The preview shows conversion notes and the prepared JSON; **Download JSON** saves it locally. **Import incident** is the separate action that sends it to the backend.
+The file picker accepts `.log`, `.txt`, `.md`, `.csv`, `.jsonl`, `.ndjson`, and `.json`. Conversion runs entirely in the browser, without a model request or uploading the file. It also works while the backend is disconnected. The preview shows conversion notes and the prepared JSON; **Download JSON** saves it locally. **Save evidence** is the separate action that sends it to the backend, and **Run investigation** starts reasoning only after that.
 
 Existing versioned incident bundles retain their typed observations. Ordinary JSON records, JSONL entries, CSV rows, and plain text are preserved as untrusted log observations. This preserves their supplied content; it does not claim to understand arbitrary monitoring schemas or infer an incident's cause. Recognized host, severity, and timezone-aware timestamp fields supply metadata when available. Source labels are derived from the filename; any original source field stays in the log content. Conversion never invents a host or event time. Unknown metadata remains null and is recorded as an evidence gap.
 

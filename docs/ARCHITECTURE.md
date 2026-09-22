@@ -1,6 +1,6 @@
 # Architecture
 
-OpsGuard combines incident investigation, local document retrieval, typed tool execution, policy checks, and evaluation reporting in one application. Reasoning is provided through a typed deterministic/OpenAI/institutional/Claude/Ollama boundary. Infrastructure observations come from imported incident snapshots or explicitly bundled scenario fixtures; there is no live cluster connector.
+OpsGuard combines incident investigation, local document retrieval, typed tool execution, policy checks, and evaluation reporting in one application. Reasoning is provided through a typed deterministic/compatible-API/OpenAI/Claude/Ollama boundary. Infrastructure observations come from imported incident snapshots or explicitly bundled scenario fixtures; there is no live cluster connector.
 
 ## Components and data flow
 
@@ -13,7 +13,7 @@ flowchart TD
     Runner --> Provider[LLM provider interface]
     Provider --> Rules[Deterministic provider]
     Provider --> OpenAI[Optional OpenAI provider]
-    Provider --> Institutional[Institutional Chat Completions]
+    Provider --> Compatible[OpenAI-compatible Chat Completions]
     Provider --> Claude[Claude Messages]
     Provider --> Ollama[Ollama chat]
     API --> Bundle[Validated incident bundle intake]
@@ -47,7 +47,7 @@ The provider proposes classification, hypotheses, assessment, recommendations, a
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind; [dashboard-shell.tsx](../frontend/components/dashboard/dashboard-shell.tsx) coordinates requests and React state |
 | API | FastAPI routers and Pydantic request/response schemas registered in [main.py](../backend/app/main.py) |
 | Agent | Fixed ten-node workflow in [runner.py](../backend/app/agent/runner.py) and [nodes.py](../backend/app/agent/nodes.py) |
-| Reasoning | Typed interface, context builder, deterministic rules, and optional OpenAI Responses, institutional Chat Completions, Claude Messages, and Ollama chat adapters in [providers](../backend/app/agent/providers) |
+| Reasoning | Typed interface, context builder, deterministic rules, and optional OpenAI-compatible Chat Completions, OpenAI Responses, Claude Messages, and Ollama chat adapters in [providers](../backend/app/agent/providers) |
 | Retrieval | SQL document ingestion, character chunking, and lexical ranking in [app/rag](../backend/app/rag) |
 | Tools | Immutable typed registry, local handlers, and run-linked audit records in [app/tools](../backend/app/tools) |
 | Watchdog | Eight deterministic policies and decision aggregation in [app/watchdog](../backend/app/watchdog) |

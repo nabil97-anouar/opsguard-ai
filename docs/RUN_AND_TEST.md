@@ -35,7 +35,7 @@ Open **http://localhost:3000**. Use localhost on the same computer as the backen
 
 1. On Overview, confirm backend connectivity and deterministic reasoning. Empty data should be labeled as empty; unavailable data should be labeled unavailable.
 2. Bright falling character streams should be visible immediately around the console, with no effects toolbar or decorative-signal label. A system reduced-motion preference takes priority and gives a static background.
-3. Open **Investigations**, choose a `.log`, `.txt`, `.csv`, `.jsonl`, `.md`, or `.json` export (or `examples/incidents/normal-workload.json`), review the automatic conversion, import it, then start the imported investigation. Importing stores data without a model request. The run uses the recorded bundle, not cluster access or fixture observations. To test bundled scenarios separately, use **Seed sample data** before starting a sample scenario.
+3. Open **Investigations**, choose a `.log`, `.txt`, `.csv`, `.jsonl`, `.md`, or `.json` export (or `examples/incidents/normal-workload.json`). The page now shows three explicit states: **Select and convert locally**, **Save evidence to OpsGuard**, and **Run the investigation**. Conversion makes no network request. Saving stores data without reasoning. Only the final action starts the configured provider. To test bundled scenarios separately, use **Seed sample data** before starting a sample scenario.
 4. Inspect the trace, recorded tool observations, evidence references, and policy findings. A successful investigation ends at human review. Destructive tool definitions are context, not actions the model necessarily proposed.
 5. Open Evidence and select an older run. Only that run's saved evidence should appear. A run without evidence should remain empty.
    Return to Investigations and choose another file: the old results and export links must disappear. Importing the new file must not bring them back. Run the new investigation and verify its title and run ID before exporting.
@@ -50,71 +50,19 @@ The animated Matrix character field is decorative and never executes commands.
 
 Repeat the import/run flow with the four [example bundles](../examples/incidents), including insufficient evidence and malicious log instructions. The source remains untrusted. Missing observations must stay empty; malicious text must not authorize tools. Download both per-investigation report formats and compare their run ID with the selected investigation. Reopen an older run after another import: its evidence and exports should still describe the original run. See [Incident Bundles](INCIDENT_BUNDLES.md) for the schema and command-line equivalent.
 
-## 4. Configure TU Darmstadt inference
+## 4. Record a complete walkthrough
 
-Keep credentials in the root `.env`, never in `.env.example` or a `NEXT_PUBLIC_*` setting. Create `.env` from the example only if it does not already exist; preserve any existing local settings.
+Use deterministic mode for a reproducible recording without API credentials. Start with a fresh SQLite filename or clearly identify existing history.
 
-Set these backend values in `.env`:
+1. Show **Overview** with Backend connected and Deterministic reasoning.
+2. Open **Investigations** and select `examples/incidents/normal-workload.json`. Point out the three states: converted locally, saved, then investigated.
+3. Run it and show the recorded trace, evidence identities, recommendation, watchdog verdict, and human-review terminal state.
+4. Select `examples/incidents/malicious-log.json`. Show that its instructions remain untrusted data and cannot authorize tools.
+5. Open **Tools & policy** and show executable local adapters separately from blocked destructive definitions and audited attempts.
+6. Run **Security harness**, then open **Evaluation** and generate the stored cohort report. Explain that these are deterministic regression checks rather than live-model benchmarks.
+7. Return to **Evidence**, select a historical run, and export its Markdown or JSON report. Confirm the visible run ID matches the downloaded report.
 
-```dotenv
-LLM_PROVIDER=institutional
-INSTITUTIONAL_LLM_BASE_URL=https://llm-service.ai.tu-darmstadt.de
-INSTITUTIONAL_LLM_API_KEY=YOUR_PRIVATE_INSTITUTIONAL_KEY
-INSTITUTIONAL_LLM_MODEL=gpt-oss-120b
-INSTITUTIONAL_LLM_RESPONSE_FORMAT=json_object
-```
-
-The base URL above is the address supplied for this project. Confirm the exact API base path with the platform operator. The adapter preserves that path and does not add `/v1` automatically. Use `json_schema` only if the selected deployment supports it. Both modes require locally validated JSON; an unsupported format causes an explicit failure, without silently switching model or provider.
-
-After stopping the backend, remove the earlier process override and restart it from the root:
-
-```bash
-source .venv/bin/activate
-unset LLM_PROVIDER
-export PYTHONPATH=backend
-export DATABASE_URL=sqlite:///./opsguard-test.db
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-The runtime card should show the institutional provider and requested model, with connectivity **not checked**. Configuration alone does not establish that the key works. A new investigation sends its context to the selected service and makes up to four bounded reasoning requests. Old runs keep their original provider and evidence snapshots.
-
-The following deployment identifiers were supplied by the project operator. They are options, not verified availability or capability claims:
-
-- `gpt-oss-120b`
-- `gemma-4-31B-it`
-- `Llama-3.1-70B-Instruct`
-- `Kimi-K2.6`
-- `Mistral-Medium-3.5-128B`
-
-To change models, edit `INSTITUTIONAL_LLM_MODEL`, restart the backend, and create a new run. `gte-Qwen2-1.5B-instruct` is an embedding deployment and is rejected as a chat model. Retrieval remains lexical.
-
-The existing OpenAI Responses adapter remains available through `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`. Claude and Ollama adapters are also available; see [Provider Setup](PROVIDERS.md) for configuration.
-
-### Optional one-request connectivity check
-
-This script deliberately reads exported variables only; it does not load `.env`. In a separate terminal, enter the key privately at the prompt. These commands work in zsh and bash:
-
-```bash
-source .venv/bin/activate
-export LLM_PROVIDER=institutional
-export INSTITUTIONAL_LLM_BASE_URL=https://llm-service.ai.tu-darmstadt.de
-export INSTITUTIONAL_LLM_MODEL=gpt-oss-120b
-export INSTITUTIONAL_LLM_RESPONSE_FORMAT=json_object
-printf 'Institutional key (hidden): '
-read -rs INSTITUTIONAL_LLM_API_KEY
-printf '\n'
-export INSTITUTIONAL_LLM_API_KEY
-python scripts/verify_institutional_provider.py
-```
-
-That command validates configuration without contacting the service. To send exactly one synthetic classification request:
-
-```bash
-python scripts/verify_institutional_provider.py --live
-unset INSTITUTIONAL_LLM_API_KEY
-```
-
-Success reports the requested and served model, structured-output validation, timing, and token usage when available. It does not establish injection resistance or compatibility with every reasoning task. Failures are explicit and do not expose the key or raw service response. Never paste your key into an issue or chat. Confirm institutional usage and data-handling terms before sending operational telemetry.
+Do not show `.env`, API keys, real operational logs, usernames, IP addresses, or private reports in the recording. Provider-specific setup belongs in [Provider Setup](PROVIDERS.md); it is not required to demonstrate the application workflow.
 
 ## 5. Run automated checks
 

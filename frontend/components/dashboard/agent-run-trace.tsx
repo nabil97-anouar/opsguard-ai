@@ -141,8 +141,8 @@ export function AgentRunTrace({
         </p>
         <CardTitle className="mt-3">No active agent run yet</CardTitle>
         <CardDescription className="mt-3">
-          Seed the sample data and launch one of the GPU or prompt-injection
-          scenarios to inspect the full step-by-step workflow.
+          For an uploaded file, complete Save evidence and Run investigation above.
+          Synthetic scenarios are available separately after seeding sample data.
         </CardDescription>
       </Card>
     );

@@ -146,7 +146,7 @@ test("initial workspace shows one view and unavailable catalog counts instead of
   assert.equal((html.match(/role="tabpanel"/g) ?? []).length, 1);
   assert.match(html, /id="panel-overview"/);
   assert.match(html, /Follow the evidence/);
-  assert.match(html, /Import incident evidence/);
+  assert.match(html, /Investigate incident evidence/);
   assert.match(html, /<dt>Documents \/ trusted<\/dt><dd>Unavailable<\/dd>/);
   assert.doesNotMatch(html, /id="panel-harness"|id="panel-evaluation"|No documents stored/);
 });
@@ -160,7 +160,7 @@ test("institutional readiness never asserts connectivity and exposes no credenti
       model_options: [{ id: "gpt-oss-120b", capability: "chat", verified: false }],
       api_key: "never-render-this-secret", base_url: "https://private.invalid", reason: null },
   });
-  assert.match(html, />Institutional</);
+  assert.match(html, />Compatible API</);
   assert.match(html, /gpt-oss-120b/);
   assert.match(html, /CONFIGURED \/ INFERENCE NOT CHECKED/);
   assert.match(html, /service availability unverified/);

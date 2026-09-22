@@ -64,7 +64,7 @@ Deterministic mode works immediately and is used by the security harness. To opt
 
 An external provider sends alert data, evidence snapshots, trust metadata, successful observations, gaps, and the allowed action vocabulary to the selected service. Treat those records as data transmitted to an external processor. Prompts and evidence content are not stored as provider provenance. Run records retain provider/model/schema/version, timing, optional token usage, and safe response IDs. Provider-call snapshots also distinguish requested and served model identifiers when returned by the service. Institutional naming does not establish permission to transmit customer telemetry or commercial-use rights.
 
-For TU configuration, model identifiers, a bounded manual check, and visual testing instructions, see [Run and test](RUN_AND_TEST.md). The runtime endpoint reports configuration separately from connectivity; it does not call the provider. Changing a provider or model requires restarting the backend.
+For compatible-endpoint configuration and provider data boundaries, see [Provider setup](PROVIDERS.md). For the complete local and visual test sequence, see [Run and test](RUN_AND_TEST.md). The runtime endpoint reports configuration separately from connectivity; it does not call the provider. Changing a provider or model requires restarting the backend.
 
 Use `http://localhost:3000` on the same computer as the API. Opening the UI through a LAN address creates a different browser origin and will fail unless that exact origin is deliberately configured. CORS does not provide authentication; keep the API local.
 

@@ -19,7 +19,7 @@ The screenshot shows a synthetic log export after local conversion and a determi
 - Convert common text-based incident exports to JSON in the browser, with a review and download step before import.
 - Import alerts and log, metric, job, and network observations without connecting to live infrastructure. Missing event times and targets remain explicit gaps.
 - Investigate imported data in isolation from bundled scenario fixtures and the global document catalog.
-- Run deterministic reasoning offline, or select TU/institutional inference, OpenAI, Claude, or Ollama through backend configuration.
+- Run deterministic reasoning offline, or select an OpenAI-compatible endpoint, OpenAI, Claude, or Ollama through backend configuration.
 - Preserve evidence identity, original observation time, content, trust, gaps, and provider provenance in each run.
 - Validate structured model output, restrict tool execution, and record watchdog findings before human review.
 - Export individual investigations and deterministic security evaluations as JSON or Markdown.
@@ -36,7 +36,7 @@ flowchart TD
     API --> Workflow[Fixed investigation workflow]
     Workflow --> Provider[Typed reasoning interface]
     Provider --> Local[Deterministic rules]
-    Provider --> Models[Optional TU / OpenAI / Claude / Ollama]
+    Provider --> Models[Optional compatible API / OpenAI / Claude / Ollama]
     Workflow --> Tools[Closed typed tool registry]
     Tools --> Saved[Imported observation snapshots]
     Tools --> Fixtures[Bundled scenario fixtures]
@@ -88,7 +88,7 @@ npm run dev
 
 **3. Open [localhost:3000](http://localhost:3000)** on the same computer. Use this address rather than a LAN IP so the default browser-origin configuration matches. The Overview should show a connected backend and deterministic reasoning.
 
-**4. Open Investigations**, choose a supported file (or [normal-workload.json](examples/incidents/normal-workload.json)), review the conversion, then click **Import incident** and **Run imported investigation**. Inspect the saved evidence, review the findings, then download its Markdown or JSON report. No seeding or API key is needed for this path.
+**4. Open Investigations**, choose a supported file (or [normal-workload.json](examples/incidents/normal-workload.json)), review the conversion, then complete the clearly labeled **Save evidence** and **Run investigation** steps. Inspect the saved evidence, review the findings, then download its Markdown or JSON report. No seeding or API key is needed for this path.
 
 For Compose, supported configuration, and troubleshooting, see [Setup](docs/SETUP.md). For a complete manual test checklist, see [Run and Test](docs/RUN_AND_TEST.md).
 
@@ -110,14 +110,14 @@ Deterministic reasoning is the default. Select one backend provider and restart 
 | Provider | `LLM_PROVIDER` | Required settings |
 | --- | --- | --- |
 | Local rules | `deterministic` | None |
-| TU / compatible institutional endpoint | `institutional` | `INSTITUTIONAL_LLM_BASE_URL`, `INSTITUTIONAL_LLM_API_KEY`, `INSTITUTIONAL_LLM_MODEL` |
+| OpenAI-compatible Chat Completions | `institutional` | `INSTITUTIONAL_LLM_BASE_URL`, `INSTITUTIONAL_LLM_API_KEY`, `INSTITUTIONAL_LLM_MODEL` |
 | OpenAI Responses | `openai` | `OPENAI_API_KEY`, `OPENAI_MODEL` |
 | Claude | `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
 | Ollama | `ollama` | `OLLAMA_MODEL`; local endpoint configured by `OLLAMA_BASE_URL` |
 
 Keep credentials only in the backend environment or ignored root `.env`, never `.env.example` or `NEXT_PUBLIC_*`. A configured provider is not proof of a successful request. Provider errors fail explicitly; the system does not silently switch providers.
 
-See [Provider Setup](docs/PROVIDERS.md) for complete examples, institutional model identifiers, local Ollama setup, timeouts, and data-handling boundaries.
+See [Provider Setup](docs/PROVIDERS.md) for generic compatible-endpoint configuration, local Ollama setup, timeouts, and data-handling boundaries.
 
 ## Evaluation
 

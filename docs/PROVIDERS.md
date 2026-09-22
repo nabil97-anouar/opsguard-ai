@@ -28,31 +28,23 @@ LLM_PROVIDER=deterministic
 
 No key or model request is used. Imported incident reasoning summarizes the supplied observations and gaps using local rules; bundled scenarios use deterministic scenario logic. Confidence values are engineering heuristics, not probabilities. The security harness always selects this provider independently of the server's investigation configuration.
 
-## TU Darmstadt / institutional Chat Completions
+## OpenAI-compatible Chat Completions
 
 ```dotenv
 LLM_PROVIDER=institutional
-INSTITUTIONAL_LLM_BASE_URL=https://llm-service.ai.tu-darmstadt.de
+INSTITUTIONAL_LLM_BASE_URL=https://inference.example.org/api
 INSTITUTIONAL_LLM_API_KEY=YOUR_PRIVATE_KEY
-INSTITUTIONAL_LLM_MODEL=gpt-oss-120b
+INSTITUTIONAL_LLM_MODEL=YOUR_CHAT_MODEL
 INSTITUTIONAL_LLM_RESPONSE_FORMAT=json_object
 ```
 
 Confirm the exact API base path with your service operator. The adapter preserves it and does not add `/v1`. HTTPS is required except for loopback development endpoints. Redirects are disabled. `json_schema` is an explicit alternative to `json_object` only if the deployment supports it; unsupported formats fail explicitly. Both modes validate the returned JSON locally.
 
-These model identifiers were supplied by the project operator, not discovered or capability-tested by OpsGuard:
-
-- `gpt-oss-120b`
-- `gemma-4-31B-it`
-- `Llama-3.1-70B-Instruct`
-- `Kimi-K2.6`
-- `Mistral-Medium-3.5-128B`
-
-Set the chosen identifier in `INSTITUTIONAL_LLM_MODEL`. `gte-Qwen2-1.5B-instruct` is an embedding deployment and is rejected as a reasoning model. Retrieval remains lexical. An optional `INSTITUTIONAL_LLM_TIMEOUT_SECONDS` overrides the common timeout.
+Set a chat-capable deployment identifier in `INSTITUTIONAL_LLM_MODEL`. Embedding-only deployments are rejected as reasoning models. Retrieval remains lexical. An optional `INSTITUTIONAL_LLM_TIMEOUT_SECONDS` overrides the common timeout.
 
 Confirm your account's model access, data retention, and permitted use with the institution before transmitting operational data. A repository license does not grant rights to an inference service.
 
-The optional [institutional probe](../scripts/verify_institutional_provider.py) reads exported variables only, not `.env`. Without `--live` it validates configuration without a request. With `--live` it sends one synthetic classification request; see the private key entry instructions in [Run and Test](RUN_AND_TEST.md#optional-one-request-connectivity-check). Success proves only that bounded request, not the security of every model task.
+The optional [compatible-endpoint probe](../scripts/verify_institutional_provider.py) reads exported variables only, not `.env`. Without `--live` it validates configuration without a request. With `--live` it sends one synthetic classification request. Success proves only that bounded request, not the security of every model task.
 
 ## OpenAI
 
