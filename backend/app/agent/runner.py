@@ -82,7 +82,7 @@ def create_agent_run(session: Session, *, alert_id: UUID, provider: LLMProvider 
     agent_run = AgentRun(
         alert_id=alert_id,
         provenance="executed",
-        execution_kind="agent_workflow",
+        execution_kind="incident_investigation" if alert.raw_data.get("origin") == "incident_bundle" else "agent_workflow",
         provider_version=identity.implementation_version,
         policy_version=POLICY_VERSION,
         status="running",

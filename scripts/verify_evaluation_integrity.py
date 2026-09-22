@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce Milestone 2 A-H against an isolated temporary SQLite database.
+"""Reproduce evaluation integrity cases A-H against an isolated temporary SQLite database.
 
 Run: .venv/bin/python scripts/verify_evaluation_integrity.py --output-dir /tmp/opsguard-m2
 """

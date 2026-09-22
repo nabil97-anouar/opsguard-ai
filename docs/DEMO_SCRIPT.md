@@ -1,6 +1,6 @@
 # Investigation and Evaluation Walkthrough
 
-This guide exercises the running API using a disposable local database. Start the services using the [Quick Start](../README.md#quick-start). The requests require curl; no model credentials or infrastructure connection are used.
+This guide exercises the running API using a disposable local database. Start the services using the [Quick Start](../README.md#quick-start). The requests require curl. Start the backend with `LLM_PROVIDER=deterministic` before using this guide; direct investigation requests use the selected provider. The shell walkthrough checks the provider before writing any data. No live infrastructure connection is used.
 
 ## Seed and investigate
 
@@ -55,7 +55,7 @@ The seed contains prewritten results labeled `fixture`. They cannot satisfy an e
 
 ## Data and reset behavior
 
-The seed operation upserts a fixed set of records; it can update sample history even with `reset: false`. The harness also reseeds data. Its default `reset_demo_data` is `false`, preserving existing history and Milestone 1 trust demotions.
+The seed operation upserts a fixed set of records; it can update sample history even with `reset: false`. The harness also reseeds data. Its default `reset_demo_data` is `false`, preserving existing history and trust demotions.
 
 Explicit reset recreates fixture records while retaining parents referenced by non-reset records. Foreign keys are enforced; deletion and reseeding commit atomically. Retained fixture parents may still be updated by the normal fixture upsert. Use a disposable database for reset experiments. Normal evaluation and harness requests do not need a reset.
 
@@ -63,7 +63,7 @@ The automated [integrity reproduction](../scripts/verify_evaluation_integrity.py
 
 ## Shell walkthrough
 
-Run `bash scripts/demo_walkthrough.sh` from the repository root after explicit schema initialization and server startup. The helper checks readiness, reads JSON through [json_field.py](../scripts/json_field.py) without sharing stdin with Python source, preserves existing activity, evaluates the returned harness ID, and exports the matching stored report. Curl/python3 are required; jq is optional. `BASE_URL` or `API_URL` can select another local address. HTTP and extraction errors stop the script with a clear message.
+Run `bash scripts/demo_walkthrough.sh` from the repository root after explicit schema initialization and server startup. The helper checks readiness and requires deterministic local reasoning before creating records, reads JSON through [json_field.py](../scripts/json_field.py) without sharing stdin with Python source, preserves existing activity, evaluates the returned harness ID, and exports the matching stored report. Curl/python3 are required; jq is optional. `BASE_URL` or `API_URL` can select another local address. HTTP and extraction errors stop the script with a clear message.
 
 ## Troubleshooting
 

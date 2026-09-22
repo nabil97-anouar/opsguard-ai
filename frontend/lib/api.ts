@@ -1,6 +1,8 @@
 import { API_BASE_URL } from "@/lib/config";
 import type {
   AgentRunDetailResponse,
+  IncidentBundle,
+  IncidentImportResponse,
   AgentRunListResponse,
   AgentRunResponse,
   BackendErrorPayload,
@@ -13,8 +15,6 @@ import type {
   HarnessScenarioListResponse,
   HealthPayload,
   ReasoningRuntime,
-  RagRetrieveRequest,
-  RagRetrieveResponse,
   ToolListResponse,
   WatchdogPoliciesResponse
 } from "@/lib/types";
@@ -56,17 +56,44 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const payload = hasJsonBody ? ((await response.json()) as unknown) : null;
 
   if (!response.ok) {
-    const detail =
-      typeof payload === "object" &&
-      payload !== null &&
-      "detail" in payload &&
-      typeof (payload as BackendErrorPayload).detail === "string"
-        ? ((payload as BackendErrorPayload).detail ?? `Request failed with status ${response.status}.`)
-        : `Request failed with status ${response.status}.`;
+    const detail = apiErrorDetail(payload, response.status);
     throw new ApiClientError(response.status, detail);
   }
 
   return payload as T;
+}
+
+// Pydantic error input/context/msg can echo uploaded data. Show only bounded,
+// recognized field paths and fixed descriptions; never serialize error objects.
+export function apiErrorDetail(payload: unknown, status: number): string {
+  const detail = typeof payload === "object" && payload !== null && "detail" in payload
+    ? (payload as BackendErrorPayload).detail : undefined;
+  if (typeof detail === "string") return detail.slice(0, 500);
+  if (Array.isArray(detail)) {
+    const fields = new Set(["body", "incident", "observations", "schema_version", "title", "description", "severity", "source", "observed_at", "infrastructure_type", "node", "job_id", "user", "kind", "message", "name", "value", "unit", "command", "status", "remote_ip", "remote_port", "process"]);
+    const errors = detail.slice(0, 6).map((error) => {
+      if (typeof error !== "object" || error === null) return "bundle: invalid value";
+      const path = Array.isArray(error.loc) ? error.loc.slice(0, 8).filter((part) => part !== "body").map((part) =>
+        typeof part === "number" && Number.isSafeInteger(part) ? String(part) : typeof part === "string" && fields.has(part) ? part : "field").join(".") : "bundle";
+      const explanations: Record<string, string> = {
+        missing: "required field missing", extra_forbidden: "field not accepted",
+        string_type: "must be text", string_too_long: "text exceeds the allowed length",
+        string_too_short: "text is too short", literal_error: "unsupported value",
+        datetime_parsing: "use an ISO 8601 timestamp with a timezone", datetime_from_date_parsing: "use an ISO 8601 timestamp with a timezone",
+        timezone_aware: "timestamp must include a timezone", int_parsing: "must be an integer",
+        float_parsing: "must be a number", finite_number: "must be a finite number",
+        too_long: "too many items or too much content", value_error: "value does not meet the incident schema",
+      };
+      const message = error.type && Object.prototype.hasOwnProperty.call(explanations, error.type) ? explanations[error.type] : "invalid value";
+      return `${path || "bundle"}: ${message}`;
+    });
+    return `Request validation failed. ${errors.join("; ")}${detail.length > 6 ? "; additional fields need correction" : ""}.`;
+  }
+  return `Request failed with status ${status}.`;
+}
+
+export async function importIncidentBundle(bundle: IncidentBundle): Promise<IncidentImportResponse> {
+  return request<IncidentImportResponse>("/incidents/import", { method: "POST", body: bundle });
 }
 
 export function getErrorMessage(error: unknown): string {
@@ -98,15 +125,6 @@ export async function seedDemoData(reset = false): Promise<DemoSeedResponse> {
 
 export async function listDocuments(): Promise<DocumentListItem[]> {
   return request<DocumentListItem[]>("/documents");
-}
-
-export async function retrieveRagChunks(
-  payload: RagRetrieveRequest
-): Promise<RagRetrieveResponse> {
-  return request<RagRetrieveResponse>("/rag/retrieve", {
-    method: "POST",
-    body: payload
-  });
 }
 
 export async function listTools(): Promise<ToolListResponse> {

@@ -1,117 +1,46 @@
-import { AlertTriangle, Cpu, Database, ShieldCheck } from "lucide-react";
-
-import { SafetyBadge } from "@/components/dashboard/safety-badge";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Cpu, Radio, ShieldCheck } from "lucide-react";
+import { providerLabel } from "@/lib/incident-import";
+import { Card } from "@/components/ui/card";
 import type { HealthPayload, ReasoningRuntime } from "@/lib/types";
 
 type SystemStatusCardProps = {
   health: HealthPayload | null;
-  documentsCount: number;
-  trustedDocumentsCount: number;
-  executableToolsCount: number;
-  blockedToolsCount: number;
-  policiesCount: number;
+  documentsCount: number | null;
+  trustedDocumentsCount: number | null;
+  executableToolsCount: number | null;
+  blockedToolsCount: number | null;
+  policiesCount: number | null;
   isLoading: boolean;
   reasoning: ReasoningRuntime | null;
 };
 
-export function SystemStatusCard({
-  health,
-  documentsCount,
-  trustedDocumentsCount,
-  executableToolsCount,
-  blockedToolsCount,
-  policiesCount,
-  isLoading,
-  reasoning
-}: SystemStatusCardProps) {
-  const systemRows = [
-    { label: "System", icon: Cpu, value: health?.status ?? "unavailable", detail: health?.environment ?? "no response" },
-    { label: "Reasoning", icon: Database, value: reasoning?.provider ?? "unavailable", detail: reasoning?.model ?? "not configured" },
-    { label: "Provider mode", icon: ShieldCheck, value: reasoning?.available ? reasoning.mode : "unavailable", detail: reasoning?.schema_version ?? "schema unavailable" }
-  ];
+export function SystemStatusCard({ health, documentsCount, trustedDocumentsCount, executableToolsCount,
+  blockedToolsCount, policiesCount, isLoading, reasoning }: SystemStatusCardProps) {
+  const deterministic = reasoning?.provider === "deterministic";
+  const providerState = isLoading ? "SYNCING" : !reasoning?.available ? "Provider unavailable"
+    : deterministic ? "LOCAL REASONING READY" : "CONFIGURED / INFERENCE NOT CHECKED";
   return (
-    <Card className="matrix-panel relative overflow-hidden">
-      <div className="absolute right-8 top-8 h-24 w-24 rounded-full bg-accent/20 blur-3xl" />
-      <div className="relative">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-accentSoft">
-              System posture
-            </p>
-            <CardTitle className="mt-3">Runtime authority map</CardTitle>
-            <CardDescription className="mt-3 max-w-xl">
-              Runtime data identifies the active provider. Evidence validation, tool policy,
-              watchdog decisions, and review requirements remain application-owned.
-            </CardDescription>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 py-2 font-mono text-xs uppercase tracking-[0.18em] text-success">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            {isLoading ? "Syncing" : reasoning?.available ? "Provider available" : "Provider unavailable"}
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-4">
-          {systemRows.map((row) => (
-            <div
-              className="flex items-center justify-between rounded-2xl border border-white/8 bg-ink/60 px-4 py-3"
-              key={row.label}
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-accentSoft">
-                  <row.icon className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm text-slate-200">{row.label}</p>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                    Backend response
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <SafetyBadge value={row.value} />
-                <p className="mt-2 max-w-52 break-all font-mono text-[10px] text-slate-500">{row.detail}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/8 bg-ink/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-              Knowledge base
-            </p>
-            <p className="mt-3 text-2xl font-semibold text-white">{documentsCount}</p>
-            <p className="mt-2 text-sm text-slate-300">
-              {trustedDocumentsCount} trusted documents,{" "}
-              {Math.max(documentsCount - trustedDocumentsCount, 0)} with other
-              trust labels
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/8 bg-ink/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-              Registered components
-            </p>
-            <p className="mt-3 text-2xl font-semibold text-white">
-              {executableToolsCount} executable adapters
-            </p>
-            <p className="mt-2 text-sm text-slate-300">
-              {blockedToolsCount} blocked action definitions · {policiesCount} watchdog policies
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-warning/20 bg-warning/10 p-4 text-sm text-amber-50">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Destructive tool requests are blocked. Recommendations require review
-            outside the application; there is no approval or execution control here.
-          </p>
-        </div>
+    <Card className="runtime-card">
+      <div className="panel-heading"><span><Cpu size={14} /> RUNTIME / PROVIDER</span><span className={health ? "text-accent" : "text-amber-300"}>{isLoading ? "SYNCING" : health ? "API ONLINE" : "API UNAVAILABLE"}</span></div>
+      <div className="runtime-provider">
+        <div className="runtime-provider-icon"><Radio size={26} /></div>
+        <div className="min-w-0"><p className="telemetry-label">SELECTED REASONING ENGINE</p><div className="mt-2"><span className="provider-name">{providerLabel(reasoning?.provider)}</span></div><p className="mt-2 break-all font-mono text-sm text-white">{reasoning?.model ?? "No runtime response"}</p></div>
       </div>
+      <p className={`runtime-state ${reasoning?.available ? "" : "runtime-state-warning"}`}>{providerState}</p>
+      <p className="mt-3 text-xs leading-5 text-slate-400">{!reasoning ? "Provider configuration is unavailable until the backend responds." : !reasoning.available ? "The selected provider is not ready. Check the backend configuration and the reason below." : deterministic ? "Deterministic local reasoning. No model-service request is made in this mode." : "Configuration is loaded. A successful investigation verifies inference; credentials alone do not."}</p>
+      {reasoning?.reason ? <p className="mt-3 text-xs leading-5 text-amber-200">{reasoning.reason}</p> : null}
+      <dl className="runtime-facts">
+        <div><dt>Documents / trusted</dt><dd>{documentsCount === null ? "Unavailable" : `${documentsCount} / ${trustedDocumentsCount ?? "?"}`}</dd></div>
+        <div><dt>Executable adapters</dt><dd>{executableToolsCount ?? "Unavailable"}</dd></div>
+        <div><dt>Blocked definitions</dt><dd>{blockedToolsCount ?? "Unavailable"}</dd></div>
+        <div><dt>Watchdog policies</dt><dd>{policiesCount ?? "Unavailable"}</dd></div>
+      </dl>
+      <details className="provider-details"><summary>Provider configuration details</summary><div>
+        <p>Provider and model are selected in the backend environment. Credentials never belong in this interface.</p>
+        {reasoning?.response_format ? <p className="mt-2">Response format: <code>{reasoning.response_format}</code></p> : null}
+        {reasoning?.model_options?.length ? <><p className="mt-3">Configured chat-model options (service availability unverified):</p><ul className="mt-2 space-y-1">{reasoning.model_options.map((model) => <li className="break-all" key={model.id}>{model.id}</li>)}</ul></> : null}
+      </div></details>
+      <p className="runtime-boundary"><ShieldCheck size={13} /> APPLICATION-OWNED TOOL &amp; POLICY BOUNDARIES</p>
     </Card>
   );
 }

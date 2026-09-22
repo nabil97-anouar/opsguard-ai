@@ -1,12 +1,12 @@
 # Security Boundaries
 
-OpsGuard constrains incident triage through a fixed workflow, a closed tool registry, input screening, policy evaluation, and a terminal review state. Its current infrastructure adapters return local fixtures; the application has no live infrastructure credentials or command-execution integration.
+OpsGuard constrains incident triage through a fixed workflow, a closed tool registry, input screening, policy evaluation, and a terminal review state. Its infrastructure adapters read imported observation snapshots or local fixtures; the application has no live infrastructure credentials or command-execution integration.
 
 This document describes implemented controls and their limits.
 
 ## Execution boundary
 
-[execute_tool](../backend/app/tools/registry.py) accepts only registered tool names and validates input and output against Pydantic schemas. Current handlers read local fixtures or SQL data, retrieve document chunks, and create local ticket drafts. They do not run arbitrary shell commands or send tickets to an external system.
+[execute_tool](../backend/app/tools/registry.py) accepts only registered tool names and validates input and output against Pydantic schemas. Current handlers read imported snapshots, local fixtures, or SQL data, retrieve document chunks, and create local ticket drafts. They do not run arbitrary shell commands or send tickets to an external system.
 
 The five disruptive definitions—`cancel_job`, `drain_node`, `block_user`, `isolate_node`, and `disable_service`—have no executable handler. The dispatcher records a denied attempt without handler invocation; run-associated destructive denials also create a safety event. Supplying an approval field does not make them executable.
 
@@ -34,11 +34,11 @@ The [watchdog](../backend/app/watchdog/policies.py) checks structured action int
 
 `grounding_reference_integrity` requires same-run references to valid source observations, rejects missing/empty references, failed or blocked tool support, quarantine, and altered recommendation snapshots. The standalone API loads its authoritative evidence ledger from persisted source steps and successful tool-call records, ignoring caller-supplied evidence as authority. Internal workflow and harness callers supply their source ledgers explicitly. This is structural reference validation, not semantic entailment.
 
-Decisions expose exact `verdict`, severity, finding IDs/types, affected action IDs, `blocking`, `mandatory_review`, reason, and `policy_version: watchdog-policy-v3`. `status` remains an exact compatibility alias. Explicit action approval requirements produce review findings; disruptive intent blocks regardless of a caller's risk or approval label. These checks remain deterministic and incomplete for arbitrary language. A policy verdict does not authorize tool dispatch or infrastructure operation.
+Decisions expose exact `verdict`, severity, finding IDs/types, affected action IDs, `blocking`, `mandatory_review`, reason, and `policy_version: watchdog-policy-v4`. `status` remains an exact compatibility alias. Explicit action approval requirements produce review findings; disruptive intent blocks regardless of a caller's risk or approval label. These checks remain deterministic and incomplete for arbitrary language. A policy verdict does not authorize tool dispatch or infrastructure operation.
 
 The external provider receives explicitly separated application constraints, task data, and untrusted evidence. Its Pydantic-validated structured output is still untrusted. Evidence IDs must resolve to the same run, action types and confidence bounds are constrained, and invalid output fails the workflow. Prompt wording is supplemental: the provider cannot change registry capabilities, trust labels, watchdog rules, audit ownership, or the terminal review requirement. The model has no direct tool-calling channel.
 
-OpenAI credentials are backend-only `SecretStr` configuration. They are not included in prompts, API responses, frontend settings, step snapshots, evaluation snapshots, or tool audits. Provider exceptions map to bounded domain errors; persisted/request errors do not include raw SDK text. Retrieved evidence is sent to OpenAI only when that provider is explicitly selected.
+OpenAI, institutional, Anthropic, and optional Ollama credentials are backend-only `SecretStr` configuration. They are not included in prompts, API responses, frontend settings, step snapshots, evaluation snapshots, or tool audits. Provider exceptions map to bounded domain errors; persisted/request errors do not include raw SDK text. Evidence is sent to an external service only when its provider is selected. Provider configuration alone is not a successful connectivity check.
 
 ## Human review and drafts
 
@@ -64,12 +64,20 @@ The [FastAPI application](../backend/app/main.py) has CORS configuration and res
 
 [docker-compose.yml](../docker-compose.yml) binds ports 3000, 8000 and 5432 to `127.0.0.1`. PostgreSQL uses local development credentials. Qdrant is not started. Loopback exposure does not supply authentication or protect against other local processes.
 
-The explicit seeding and table-creation endpoints reject `ENVIRONMENT=production`, but that setting does not harden the application: harness/evaluation paths can still seed or reset data. Ordinary routes perform no DDL; schema initialization is an explicit command or development setup endpoint Use disposable fixture databases for these workflows and keep the API on a trusted local network boundary.
+The explicit seeding and table-creation endpoints reject `ENVIRONMENT=production`, but that setting does not harden the application: harness/evaluation paths can still seed or reset data. Ordinary routes perform no DDL; schema initialization is an explicit command or development setup endpoint. Use disposable fixture databases for these workflows and keep the API on a trusted local network boundary.
 
-The default deterministic provider requires no external key. OpenAI mode requires backend-only key/model configuration and fails instead of silently falling back. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings. Qdrant and other provider settings remain absent.
+The default deterministic provider requires no external key. External reasoning requires backend-only key/model configuration and fails instead of silently falling back. Avoid placing credentials in browser-visible `NEXT_PUBLIC_*` settings. Claude and Ollama are optional reasoning adapters; no Qdrant retrieval integration is present.
 
 ## Interpreting evaluation
 
 Security-harness outcomes show whether particular implemented checks fired for particular fixtures. Evaluation includes cohort-scoped counts and explicitly defined rates; it is not a certification of application security or a scientific measurement of model reliability.
 
 See [Security Harness](SECURITY_HARNESS.md), [Evaluation](EVALUATION.md), and [API Reference](API_SPEC.md) for reproducible inputs, result semantics, and supported operations.
+
+Blocked tool definitions describe prohibited capabilities. Their presence does not establish that the model or operator requested them. Policy v4 separates that context from actual proposed actions and planned tool requests; historical verdict snapshots retain their original policy version.
+
+## Incident intake isolation
+
+Incident import is bounded to 1 MiB and 32 typed observations with explicit unknown event times/targets when missing, with smaller per-record snapshot budgets. Additional fields and caller-assigned trust/identities are rejected. A bundle remains untrusted regardless of scanner output. The imported run snapshots its bundle and reads those observations through a dedicated adapter; fixture tools and global document/history lookup are denied in that context. Reports render persisted records only. This isolates source data; it does not authenticate exported logs or prove a model's interpretation. See [Incident Bundles](INCIDENT_BUNDLES.md).
+
+File conversion is a deterministic browser operation, not model reasoning. Converted content remains untrusted. Missing times or targets remain null in the source snapshot and become evidence gaps; an application recording timestamp is explicitly distinguished from an event timestamp.

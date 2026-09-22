@@ -19,7 +19,7 @@ All paths below are relative to `/api/v1`.
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/health` | Liveness only: version, environment, configured reasoner name, timestamp; no dependency checks |
-| GET | `/runtime/reasoning` | Safe provider/model/mode/version/schema and configuration/availability state; never credentials |
+| GET | `/runtime/reasoning` | Safe provider/model/mode/version/schema, configuration and connectivity state; never credentials or a live probe |
 | GET | `/ready` | SQL connection plus required tables/columns; 200 ready or 503 unavailable/schema missing; no DDL |
 | GET | `/db/health` | Database connectivity and latency |
 | POST | `/db/create-tables` | Create missing SQL tables; explicit endpoint disabled when `ENVIRONMENT=production` |
@@ -30,6 +30,9 @@ All paths below are relative to `/api/v1`.
 | GET | `/tools` | Tool definitions and input/output JSON schemas |
 | POST | `/tools/{tool_name}/execute` | Audit the attempt, enforce application policy, then dispatch or deny |
 | GET | `/tools/attempts` | Latest 100 authoritative tool attempts; optional `agent_run_id` filter |
+| POST | `/incidents/import` | Validate and store a versioned untrusted incident bundle; does not invoke a model |
+| GET | `/agent/runs/{agent_run_id}/report.json` | Historical investigation JSON from persisted run snapshots |
+| GET | `/agent/runs/{agent_run_id}/report.md` | The same investigation as Markdown |
 | POST | `/agent/runs` | Run an investigation for an existing alert |
 | GET | `/agent/runs` | Most recent 20 stored runs |
 | GET | `/agent/runs/{agent_run_id}` | Run metadata, steps, tools, assessment, and recommendation |
@@ -45,11 +48,19 @@ All paths below are relative to `/api/v1`.
 | GET | `/evaluation/report.json` | Same stored report as JSON; optional `evaluation_run_id` query |
 | GET | `/evaluation/scores` | Report-history envelopes with origin/report-kind labels |
 
-The list endpoints above do not expose configurable pagination. There are no alert CRUD, approval/rejection, feedback submission, ticket export, or per-incident report endpoints.
+The list endpoints above do not expose configurable pagination. There are no general alert CRUD, approval/rejection, feedback submission, or remote ticket-submission endpoints. Incident import is creation-only; individual investigation reports are distinct from harness evaluation reports.
+
+The runtime provider is `deterministic`, `openai`, `institutional`, `anthropic`, or `ollama`. `connectivity` is `local`, `not_checked`, or `not_configured`; the compatibility `available` field means the adapter has its required configuration, not that a remote request succeeded. Institutional runtime metadata includes the configured `response_format` and user-supplied `model_options` explicitly marked unverified. Keys and service URLs are not returned. Provider-call step snapshots retain `requested_model` and nullable `served_model` independently; changing current configuration does not relabel historical runs.
 
 ## Request examples
 
 These are request bodies for the named endpoints. Replace example run/alert UUIDs with existing record IDs.
+
+### Import and export an incident
+
+The dashboard converts supported text-based exports locally; the API itself accepts canonical JSON. `POST /incidents/import` accepts the versioned alert/observation contract in [Incident Bundles](INCIDENT_BUNDLES.md). It enforces a 1 MiB body limit, at most 32 typed observations, timezone-aware timestamps when supplied, optional unknown event times/targets, and untrusted server-assigned identities. HTTP 201 returns `alert_id` and import metadata without invoking a model. Pass that alert ID to `POST /agent/runs`.
+
+`GET /agent/runs/{agent_run_id}/report.json` and `.md` render only saved run records, including evidence identities, findings, and completion status. They do not reevaluate or fetch current sources. Missing runs return 404. These exports are separate from `/evaluation/report.*`, which describe a harness cohort.
 
 ### Seed fixtures
 
@@ -114,7 +125,7 @@ Unknown tools return 404 and malformed/invalid inputs return 422 with structured
 
 `GET /tools/attempts?agent_run_id=UUID` lists matching recent attempts, or all recent attempts without the filter. Each row exposes `id`, outer run/step IDs, requested tool/origin, input snapshot, authorized target, `validated`, outcome, `handler_invoked`, requested/invoked/completed timestamps, output snapshot, error code, user error and diagnostic exception type. `requested`, `validated` or `invoked` without completion is an incomplete attempt, not success. This list is live activity, not a stored evaluation cohort.
 
-`GET /tools` exposes `executable` for each definition: seven local adapters are executable and five destructive definitions are blocked. Ticket input now contains only `title` and `body`, with run ID in the envelope. Its output adds `lifecycle_state`, `policy_validation`, and `policy_version`; direct calls produce unreviewed candidates. See [Tool Registry](TOOL_REGISTRY.md) for authorization and transaction ownership.
+`GET /tools` exposes `executable` for each definition: eight local adapters are executable and five destructive definitions are blocked. Ticket input now contains only `title` and `body`, with run ID in the envelope. Its output adds `lifecycle_state`, `policy_validation`, and `policy_version`; direct calls produce unreviewed candidates. See [Tool Registry](TOOL_REGISTRY.md) for authorization and transaction ownership.
 
 ### Investigate an alert
 

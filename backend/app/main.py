@@ -16,6 +16,8 @@ from app.api.routes.documents import router as documents_router
 from app.api.routes.evaluation import router as evaluation_router
 from app.api.routes.harness import router as harness_router
 from app.api.routes.health import router as health_router
+from app.api.routes.incidents import router as incidents_router
+from app.api.routes.incident_reports import router as incident_reports_router
 from app.api.routes.rag import router as rag_router
 from app.api.routes.runtime import router as runtime_router
 from app.api.routes.tools import router as tools_router
@@ -86,6 +88,8 @@ def create_application() -> FastAPI:
         return response
 
     application.include_router(health_router, prefix=settings.api_v1_prefix)
+    application.include_router(incidents_router, prefix=settings.api_v1_prefix)
+    application.include_router(incident_reports_router, prefix=settings.api_v1_prefix)
     application.include_router(db_router, prefix=settings.api_v1_prefix)
     application.include_router(demo_router, prefix=settings.api_v1_prefix)
     application.include_router(agent_router, prefix=settings.api_v1_prefix)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -46,10 +47,24 @@ def test_invalid_cors_fails_early_without_echoing_secret(monkeypatch, value):
 def test_only_supported_provider_settings_are_present(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     settings = Settings(_env_file=None)
-    assert {"llm_provider", "openai_api_key", "openai_model"} <= type(settings).model_fields.keys()
-    assert not ({"mock_llm", "qdrant_url", "anthropic_api_key", "secret_key", "postgres_password"} & type(settings).model_fields.keys())
+    assert {"llm_provider", "openai_api_key", "openai_model", "institutional_llm_api_key",
+            "anthropic_api_key", "anthropic_model", "ollama_base_url", "ollama_model"} <= type(settings).model_fields.keys()
+    assert not ({"mock_llm", "qdrant_url", "secret_key", "postgres_password"} & type(settings).model_fields.keys())
     example = ROOT.joinpath(".env.example").read_text()
-    assert "QDRANT" not in example and "ANTHROPIC" not in example and "SECRET_KEY" not in example
+    assert "QDRANT" not in example and "SECRET_KEY" not in example
+    assignments = dict(line.split("=", 1) for line in example.splitlines() if line and not line.startswith("#") and "=" in line)
+    for key in ("OPENAI_API_KEY", "INSTITUTIONAL_LLM_API_KEY", "ANTHROPIC_API_KEY", "OLLAMA_API_KEY"):
+        assert assignments[key] == "", f"{key} must be blank in the committed example"
+
+
+def test_direct_runtime_dependency_versions_are_present_in_both_hash_locks():
+    inputs = ROOT.joinpath("backend/requirements.in").read_text()
+    requirements = re.findall(r"(?m)^([a-zA-Z0-9_-]+)(?:\[[^\]]+\])?==([^\s]+)", inputs)
+    assert requirements
+    for lock_path in ("backend/requirements.txt", "backend/requirements-dev.txt"):
+        locked = ROOT.joinpath(lock_path).read_text()
+        for name, version in requirements:
+            assert re.search(rf"(?m)^{re.escape(name)}=={re.escape(version)} \\\n\s+--hash=sha256:[0-9a-f]{{64}}", locked), f"{name} missing or differs in {lock_path}"
 
 
 @pytest.fixture
@@ -226,6 +241,8 @@ def test_walkthrough_rejects_http_success_with_failed_investigation(tmp_path):
 url = next(value for value in sys.argv if value.startswith("http"))
 if url.endswith("/ready"):
     print(json.dumps({"status": "ready"}))
+elif url.endswith("/runtime/reasoning"):
+    print(json.dumps({"provider": "deterministic", "mode": "local"}))
 elif url.endswith("/demo/seed"):
     print(json.dumps({"status": "ok"}))
 elif url.endswith("/agent/runs"):

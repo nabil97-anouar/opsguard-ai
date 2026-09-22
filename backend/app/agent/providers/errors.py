@@ -27,3 +27,19 @@ class ProviderRateLimitError(ProviderError):
 
 class ProviderInvalidOutputError(ProviderError):
     public_message = "Reasoning provider returned invalid structured output."
+
+
+class ProviderAuthenticationError(ProviderError):
+    public_message = "Reasoning provider rejected credentials or access permissions."
+
+
+class ProviderRequestError(ProviderError):
+    public_message = "Reasoning provider rejected the request. Check the API base URL, model and response-format configuration."
+
+
+class ProviderRefusalError(ProviderInvalidOutputError):
+    public_message = "Reasoning provider refused the request; no recommendation was accepted."
+
+
+class ProviderTruncatedOutputError(ProviderInvalidOutputError):
+    public_message = "Reasoning provider output was truncated; no partial recommendation was accepted."

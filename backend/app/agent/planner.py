@@ -18,6 +18,30 @@ def _target_from_state(state: AgentState, field: str) -> str | None:
 
 
 def plan_tools_for_state(state: AgentState) -> tuple[list[PlannedToolCall], list[BlockedToolRecommendation]]:
+    if state.incident_bundle_snapshot is not None:
+        records = state.incident_bundle_snapshot["observations"]
+        kinds = {record["observation"]["kind"] for record in records}
+        for kind in ("log", "metric", "job", "network"):
+            if kind not in kinds:
+                gap = f"No imported {kind} observations were supplied; no fixture or live data was substituted."
+                if gap not in state.missing_evidence:
+                    state.missing_evidence.append(gap)
+        if not (state.alert_summary and state.alert_summary.raw_data.get("node")):
+            _target_from_state(state, "node")
+        # Group by missing field, retaining every affected observation ID. This
+        # keeps the provider's 30-gap bound without dropping any missing facts.
+        for field, description in (("observed_at", "source event timestamp"), ("node", "node target")):
+            missing_ids = [record["observation_id"] for record in records if record["observation"].get(field) is None]
+            if missing_ids:
+                gap = f"Imported observations missing a {description}: {', '.join(missing_ids)}. No value was inferred."
+                if gap not in state.missing_evidence:
+                    state.missing_evidence.append(gap)
+                if field == "node" and "observation_node" not in state.missing_targets:
+                    state.missing_targets.append("observation_node")
+        return ([PlannedToolCall(tool_name="read_incident_observation",
+                                 input={"observation_id": record["observation_id"]},
+                                 rationale="Read this run's imported observation without contacting infrastructure.")
+                 for record in records], [])
     alert_type = str(state.alert_classification.get("alert_type") or "unknown")
     alert = state.alert_summary
     description = alert.description if alert else ""

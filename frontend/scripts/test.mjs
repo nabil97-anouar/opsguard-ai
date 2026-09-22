@@ -17,12 +17,15 @@ try {
       typeRoots: [join(projectRoot, "node_modules/@types")]
     },
     include: [
-      "lib/dashboard-data.ts", "lib/safety-status.ts", "lib/api.ts",
+      "lib/dashboard-data.ts", "lib/safety-status.ts", "lib/api.ts", "lib/incident-file-converter.ts",
       "components/dashboard/tool-registry-groups.tsx", "components/dashboard/harness-results-panel.tsx",
       "components/dashboard/tool-attempts-panel.tsx", "components/dashboard/tool-calls-panel.tsx", "components/dashboard/watchdog-findings-panel.tsx",
       "components/dashboard/evaluation-summary-card.tsx", "components/dashboard/agent-run-trace.tsx"
       , "components/dashboard/system-status-card.tsx", "components/dashboard/structured-actions-panel.tsx",
-      "components/dashboard/matrix-rain-background.tsx"
+      "components/dashboard/matrix-rain-background.tsx", "components/dashboard/matrix-controls.tsx",
+      "components/dashboard/workspace-navigation.tsx", "components/dashboard/dashboard-shell.tsx",
+      "components/dashboard/incident-import-card.tsx", "components/dashboard/imported-evidence-panel.tsx",
+      "components/dashboard/investigation-report-links.tsx"
     ].map((file) => join(projectRoot, file)),
     exclude: [join(projectRoot, "node_modules")]
   }));

@@ -60,7 +60,7 @@ request_json() {
 
 print_header "OpsGuard AI Demo Walkthrough"
 printf 'Base URL: %s\n' "$BASE_URL"
-printf 'This script is local-only, deterministic, and never executes infrastructure actions.\n'
+printf 'This walkthrough requires deterministic reasoning and never executes infrastructure actions.\n'
 
 print_header "1. Backend readiness"
 health_payload="$(request_json GET "/ready")" || {
@@ -70,6 +70,14 @@ health_payload="$(request_json GET "/ready")" || {
   exit 1
 }
 printf '%s\n' "$health_payload" | pretty_json
+
+# Check before any mutation so a local .env cannot silently enable billed inference.
+runtime_payload="$(request_json GET "/runtime/reasoning")"
+if [[ "$(printf '%s\n' "$runtime_payload" | json_field "provider")" != "deterministic" ]]; then
+  printf 'This walkthrough requires LLM_PROVIDER=deterministic. Restart the backend in deterministic mode; no fixtures or investigations were created.\n' >&2
+  exit 1
+fi
+require_field "$runtime_payload" "mode" "local"
 
 print_header "2. Seed deterministic demo data"
 seed_payload="$(request_json POST "/demo/seed" '{"reset": false}')"

@@ -7,12 +7,12 @@ from urllib.parse import unquote
 
 def main():
     root = Path(__file__).resolve().parents[1]
-    files = [*root.glob("*.md"), *root.joinpath("docs").glob("*.md")]
+    files = [*root.glob("*.md"), *root.joinpath("docs").rglob("*.md")]
     checked = 0
     errors = []
     for path in files:
         text = re.sub(r"```.*?```", "", path.read_text(), flags=re.S)
-        for href in re.findall(r"(?<!!)\[[^\]]+\]\(([^)]+)\)", text):
+        for href in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
             href = href.split(' "', 1)[0].strip("<>")
             if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", href) or href.startswith("#"):
                 continue

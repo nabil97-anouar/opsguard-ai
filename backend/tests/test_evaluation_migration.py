@@ -23,7 +23,7 @@ def test_additive_upgrade_preserves_legacy_rows_and_never_invents_execution(monk
         session.commit()
         legacy_id, report_id = legacy.id, report.id
         legacy_payload = report.model_dump(mode="json")
-    # Remove only v2 additions to reproduce a pre-milestone SQLite schema.
+    # Remove only v2 additions to reproduce a earlier SQLite schema.
     EvaluationReport.__table__.drop(engine)
     SecurityHarnessRun.__table__.drop(engine)
     with engine.begin() as connection:
@@ -85,7 +85,7 @@ def test_agent_api_distinguishes_fixture_history_from_execution_on_demo_input(mo
     assert run["provenance"] == "executed"
     assert run["execution_kind"] == "agent_workflow"
     assert run["provider_version"] == "deterministic-v3"
-    assert run["policy_version"] == "watchdog-policy-v3"
+    assert run["policy_version"] == "watchdog-policy-v4"
     detail = client.get(f"/api/v1/agent/runs/{run['agent_run_id']}").json()
     assert detail["provenance"] == "executed"
     assert detail["execution_kind"] == "agent_workflow"

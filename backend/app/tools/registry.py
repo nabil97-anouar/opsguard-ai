@@ -13,6 +13,9 @@ from app.models.base import utcnow
 from app.rag.trust import TrustLevel
 from app.tools.audit import elapsed_ms, record_dangerous_tool_attempt, record_tool_call, start_timer
 from app.tools.base import ToolDefinition, ToolExecutionContext, ToolExecutionResult, UnknownToolError
+from app.tools.incident_observations import (
+    ReadIncidentObservationInput, ReadIncidentObservationOutput, read_incident_observation_handler,
+)
 from app.tools.implementations import (
     BlockedToolOutput,
     CheckNetworkConnectionsInput,
@@ -77,6 +80,17 @@ def _observe_execution(event: str, definition: ToolDefinition, input_args: dict[
 
 def _build_registry() -> dict[str, ToolDefinition]:
     return {
+        "read_incident_observation": ToolDefinition(
+            name="read_incident_observation",
+            description="Read one untrusted observation from the incident bundle recorded for this run.",
+            input_schema=ReadIncidentObservationInput,
+            output_schema=ReadIncidentObservationOutput,
+            trust_level=TrustLevel.UNTRUSTED,
+            allowed_use=("Read a bounded observation already bound to this imported incident run.",),
+            blocked_use=("No fixture fallback, cross-bundle reads, live infrastructure or external requests.",),
+            requires_human_approval=False, is_destructive=False,
+            handler=read_incident_observation_handler,
+        ),
         "search_logs": ToolDefinition(
             name="search_logs",
             description="Search deterministic mock logs for alert-related terms.",
@@ -295,7 +309,7 @@ def authorize_tool(definition: ToolDefinition, inputs: dict[str, Any], context: 
         return "handler_unavailable"
     if any(broad_scope(value, key) for key, value in inputs.items() if key in {"node", "user", "target", "targets", "selector", "scope"}):
         return "broad_target_denied"
-    if definition.name == "create_ticket_draft" and context.agent_run_id is None:
+    if definition.name in {"create_ticket_draft", "read_incident_observation"} and context.agent_run_id is None:
         return "run_context_required"
     return None
 
@@ -388,6 +402,11 @@ def execute_tool(
         step = audit_session.get(AgentStep, context.step_id) if context.step_id else None
         invalid_context = (context.agent_run_id is not None and run is None) or (context.step_id is not None and (step is None or step.agent_run_id != context.agent_run_id))
     denial = "invalid_run_context" if invalid_context else authorize_tool(definition, input_payload, context)
+    if not denial and run is not None and run.execution_kind == "incident_investigation":
+        # Direct API dispatch is subject to the same source-isolation boundary
+        # as the planner. A matching fixture hostname never grants fixture data.
+        if definition.name not in {"read_incident_observation", "create_ticket_draft"}:
+            denial = "imported_source_isolation"
     if denial:
         return finish("denied", code=denial, message="Tool dispatch denied by application policy.",
             output={"status": "blocked", "reason": denial, "requires_human_approval": definition.requires_human_approval})

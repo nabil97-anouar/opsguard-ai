@@ -113,6 +113,42 @@ def test_openai_provider_accepts_structured_output_and_records_safe_usage() -> N
     assert "shutdown --all" in request_text
 
 
+@pytest.mark.parametrize("field", ["parsed", "raw_text", "raw_output", "id", "model"])
+def test_openai_success_response_rejects_configured_credential_echo(field, caplog) -> None:
+    credential = "sk-test-secret"
+    response = SimpleNamespace(
+        id="resp-safe", model="served-safe", output_parsed=valid_classification(),
+        output_text=json.dumps(valid_classification()), output=[], usage=None,
+    )
+    if field == "parsed":
+        response.output_parsed = ProviderClassification.model_validate({
+            **valid_classification(), "classification_rationale": f"Returned {credential}.",
+        })
+    elif field == "raw_text":
+        response.output_text = f"Returned {credential}."
+    elif field == "raw_output":
+        response.output = [{"content": [{"text": f"Returned {credential}."}]}]
+    else:
+        setattr(response, field, f"prefix-{credential}-suffix")
+    calls = []
+
+    def parse(**kwargs):
+        calls.append(kwargs)
+        return response
+
+    provider = OpenAIProvider(
+        api_key=credential, model="gpt-test", timeout_seconds=2, max_output_tokens=500,
+        client=SimpleNamespace(responses=SimpleNamespace(parse=parse)),
+    )
+    with pytest.raises(ProviderInvalidOutputError) as caught:
+        provider.classify(context())
+    assert type(caught.value) is ProviderInvalidOutputError
+    assert credential not in str(caught.value)
+    assert credential not in str(caught.value.diagnostic)
+    assert credential not in caplog.text
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize("confidence", [-0.1, 1.1, float("nan"), float("inf")])
 def test_invalid_confidence_is_rejected(confidence) -> None:
     output = {**valid_classification(), "confidence": confidence}

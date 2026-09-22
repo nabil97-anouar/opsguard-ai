@@ -8,6 +8,7 @@ From the repository root, with the Python virtual environment active:
 python -m pytest backend/tests -q
 python -m ruff check backend scripts
 python -m mypy
+python scripts/check_secrets.py
 python scripts/check_markdown_links.py
 bash -n scripts/demo_walkthrough.sh
 python scripts/verify_evaluation_integrity.py --output-dir /tmp/opsguard-evaluation
@@ -38,3 +39,11 @@ Keep changes focused. Follow the existing Python type annotations/Pydantic model
 Add exact regression tests and update affected docs when behavior changes. Preserve evidence identities, fixture/execution provenance, immutable evaluation cohorts, tool-attempt audit ownership, and mandatory policy invariants. Security-sensitive changes should exercise rejection and failure paths, not just successful runs. Avoid permissive assertions, score tuning, credentials in fixtures, or new integrations hidden in repository cleanup.
 
 Update dependency inputs and regenerate both hash locks together as described in Setup. Commit `package-lock.json` with frontend dependency changes. Report vulnerabilities through [SECURITY.md](SECURITY.md), not public reproductions containing sensitive details.
+
+The credential guard checks known token formats, nonempty example credentials, and private local filenames. It prints locations, never values; it is not a comprehensive secret scanner. To run the same check on staged blobs before each commit, enable the included hook explicitly:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+CI also runs the guard, but a CI failure occurs after upload and cannot undo a credential exposure. Revoke exposed real keys even if they were never committed.

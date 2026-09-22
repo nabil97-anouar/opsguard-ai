@@ -28,6 +28,7 @@ jobs:
       - run: python -m pytest backend/tests -q
       - run: python -m ruff check backend scripts
       - run: python -m mypy
+      - run: python scripts/check_secrets.py
       - run: python scripts/check_markdown_links.py
       - run: bash -n scripts/demo_walkthrough.sh
       - run: python scripts/verify_evaluation_integrity.py --output-dir /tmp/opsguard-evaluation

@@ -10,6 +10,7 @@ source .venv/bin/activate
 python -m pip install --require-hashes -r backend/requirements-dev.txt
 export PYTHONPATH=backend
 export DATABASE_URL=sqlite:///./opsguard.db
+export LLM_PROVIDER=deterministic
 python -m app.db.init_db
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -33,7 +34,7 @@ curl --fail http://localhost:8000/api/v1/ready
 bash scripts/demo_walkthrough.sh
 ```
 
-The walkthrough uses seeded IDs, executes two investigations, runs the harness without resetting prior activity, evaluates that explicit execution, and exports the stored report by evaluation ID. It requires curl and python3; jq is optional. Override `BASE_URL` or the complete `API_URL` for a different local port/prefix. Failed HTTP requests, missing JSON fields, failed investigations and failed harness assertions stop with an error.
+The walkthrough requires a deterministic backend before any mutation, uses seeded IDs, executes two investigations, runs the harness without resetting prior activity, evaluates that explicit execution, and exports the stored report by evaluation ID. It requires curl and python3; jq is optional. Override `BASE_URL` or the complete `API_URL` for a different local port/prefix. Failed HTTP requests, missing JSON fields, failed investigations and failed harness assertions stop with an error.
 
 ## Configuration
 
@@ -44,9 +45,14 @@ The walkthrough uses seeded IDs, executes two investigations, runs the harness w
 | `DATABASE_URL` | SQLAlchemy `sqlite` or `postgresql+psycopg` URL; default local PostgreSQL. SQLite paths are relative to the process working directory. |
 | `ENVIRONMENT` | `development` (default), `staging`, or `production`. Direct seed/create-table endpoints are disabled in production; this is not an authentication boundary. |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
-| `LLM_PROVIDER` | `deterministic` (default) or `openai`. Selection remains backend-only. |
+| `LLM_PROVIDER` | `deterministic` (default), `openai`, `institutional`, `anthropic`, or `ollama`. Selection remains backend-only. |
 | `OPENAI_API_KEY` | Required only when `LLM_PROVIDER=openai`; stored as a secret setting and never returned by the runtime endpoint. |
 | `OPENAI_MODEL` | Required only for OpenAI mode. Choose a model available to the configured OpenAI project that supports structured outputs. |
+| `INSTITUTIONAL_LLM_BASE_URL` | Required for institutional mode. Use the API base URL supplied by the service operator, including its path if required. The adapter does not append `/v1`. |
+| `INSTITUTIONAL_LLM_API_KEY` | Backend-only credential for the institutional service; never reuse an OpenAI credential automatically. |
+| `INSTITUTIONAL_LLM_MODEL` | Required deployment/model identifier for institutional mode. |
+| `INSTITUTIONAL_LLM_RESPONSE_FORMAT` | Explicit `json_object` (default) or `json_schema`; use only a format supported by the selected deployment. All output is validated locally. |
+| `INSTITUTIONAL_LLM_TIMEOUT_SECONDS` | Optional institutional override of the common timeout. |
 | `LLM_TIMEOUT_SECONDS` | Per provider call timeout, 1–120 seconds; default 30. |
 | `LLM_MAX_OUTPUT_TOKENS` | Per provider call output bound, 256–8000; default 1800. |
 | `BACKEND_CORS_ORIGINS` | JSON array or comma-separated explicit HTTP(S) origins. Empty disables cross-origin access. Wildcards, credentials and paths are rejected. |
@@ -56,9 +62,19 @@ The walkthrough uses seeded IDs, executes two investigations, runs the harness w
 
 Deterministic mode works immediately and is used by the security harness. To opt into OpenAI reasoning, set `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL` in the backend environment, then restart the backend. Invalid provider names fail settings validation; selecting OpenAI without its key/model fails explicitly when a run starts. `GET /api/v1/runtime/reasoning` exposes provider/model/configuration state without credentials. The optional `python scripts/verify_openai_provider.py` command performs one bounded structured-output call and is never run by CI.
 
-The provider sends alert data, evidence snapshots, trust metadata, successful observations, gaps, and the allowed action vocabulary to OpenAI. Treat those records as data transmitted to an external processor. Prompts and evidence content are not stored as provider provenance. Run records retain provider/model/schema/version, timing, optional token usage, and safe response IDs.
+An external provider sends alert data, evidence snapshots, trust metadata, successful observations, gaps, and the allowed action vocabulary to the selected service. Treat those records as data transmitted to an external processor. Prompts and evidence content are not stored as provider provenance. Run records retain provider/model/schema/version, timing, optional token usage, and safe response IDs. Provider-call snapshots also distinguish requested and served model identifiers when returned by the service. Institutional naming does not establish permission to transmit customer telemetry or commercial-use rights.
+
+For TU configuration, model identifiers, a bounded manual check, and visual testing instructions, see [Run and test](RUN_AND_TEST.md). The runtime endpoint reports configuration separately from connectivity; it does not call the provider. Changing a provider or model requires restarting the backend.
+
+Use `http://localhost:3000` on the same computer as the API. Opening the UI through a LAN address creates a different browser origin and will fail unless that exact origin is deliberately configured. CORS does not provide authentication; keep the API local.
 
 Next.js reads its process environment or `frontend/.env.local`; it does not load root `.env` in native mode. The browser API URL is public and embedded during build. Changing a running frontend container's environment cannot change it: pass a build argument and rebuild. Never place credentials in `NEXT_PUBLIC_*`. The interface uses system font stacks and requires no runtime font download.
+
+## Additional reasoning providers
+
+Claude uses `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_MODEL`. Ollama uses `LLM_PROVIDER=ollama`, `OLLAMA_MODEL`, and `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`), with an optional gateway `OLLAMA_API_KEY`. Each supports its own timeout override. See [Provider Setup](PROVIDERS.md) for native API behavior, endpoint validation, data transfer, and exact settings.
+
+To use your own observations rather than scenarios, follow [Incident Bundles](INCIDENT_BUNDLES.md). Importing does not run inference or seed fixtures.
 
 ## Compose
 

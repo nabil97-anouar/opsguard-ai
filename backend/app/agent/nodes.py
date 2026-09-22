@@ -86,6 +86,8 @@ def _record_provider_call(agent_run: AgentRun, result: ProviderCallResult) -> di
         "duration_ms": result.duration_ms,
         "input_tokens": result.input_tokens,
         "output_tokens": result.output_tokens,
+        "requested_model": result.requested_model or agent_run.model_version,
+        "served_model": result.served_model,
     }
 
 
@@ -184,12 +186,18 @@ def _run_node(
 
 
 def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> AgentState:
-    def handler(_: AgentStep) -> dict[str, Any]:
+    def handler(step: AgentStep) -> dict[str, Any]:
         alert = session.get(Alert, state.alert_id)
         if alert is None:
             raise ValueError(f"Alert '{state.alert_id}' was not found.")
 
-        description = str(alert.raw_data.get("description") or alert.title)
+        raw_data = deepcopy(alert.raw_data)
+        if agent_run.execution_kind == "incident_investigation":
+            from app.services.incident_bundles import validate_stored_bundle
+            state.incident_bundle_snapshot = validate_stored_bundle(raw_data["bundle"])
+            bundle = state.incident_bundle_snapshot
+            raw_data = {**bundle["incident"], "origin": "incident_bundle", "bundle_id": bundle["bundle_id"]}
+        description = str(raw_data.get("description") or alert.title)
         state.alert_summary = AlertSummary(
             id=alert.id,
             title=alert.title,
@@ -198,9 +206,17 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
             infrastructure_type=alert.infrastructure_type,
             status=alert.status,
             description=description,
-            raw_data=alert.raw_data,
+            raw_data=raw_data,
             tags=alert.tags,
         )
+        alert_scan = detect_prompt_injection(json.dumps(state.alert_summary.model_dump(mode="json")))
+        if state.incident_bundle_snapshot is not None and alert_scan["is_suspicious"]:
+            state.suspicious_items.append({"category": "imported_alert", **alert_scan})
+        source_observed_at = raw_data.get("observed_at") if state.incident_bundle_snapshot else None
+        if state.incident_bundle_snapshot is not None and source_observed_at is None:
+            _append_missing_evidence(state, [
+                "Imported incident has no source event timestamp; the evidence timestamp records ingestion only."
+            ])
         state.evidence_items.append(
             EvidenceItem(
                 agent_run_id=state.agent_run_id,
@@ -209,12 +225,16 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
                 source_type="alert",
                 alert_id=alert.id,
                 content=deepcopy(state.alert_summary.model_dump(mode="json")),
-                observed_at=utcnow(),
+                observed_at=datetime.fromisoformat(source_observed_at.replace("Z", "+00:00")) if source_observed_at else _ensure_aware(step.created_at),
+                timestamp_basis=("source_observation" if source_observed_at else "recorded") if state.incident_bundle_snapshot else None,
                 summary=description,
                 citation=f"alert://{alert.id}/run/{state.agent_run_id}",
                 trust_level="untrusted",
-                suspicious=False,
+                suspicious=bool(alert_scan["is_suspicious"]) if state.incident_bundle_snapshot else False,
                 source=alert.source,
+                matched_patterns=list(alert_scan["matched_patterns"]) if state.incident_bundle_snapshot else [],
+                risk_level=str(alert_scan["risk_level"]) if state.incident_bundle_snapshot else "low",
+                bundle_id=state.incident_bundle_snapshot["bundle_id"] if state.incident_bundle_snapshot else None,
             )
         )
         alert.agent_run_id = agent_run.id
@@ -226,11 +246,15 @@ def ingest_alert(session: Session, agent_run: AgentRun, state: AgentState) -> Ag
         session.add(alert)
         session.add(agent_run)
 
-        return {
+        output = {
             "alert": state.alert_summary.model_dump(mode="json"),
             "evidence_added": 1,
             "evidence_items": [item.model_dump(mode="json") for item in state.evidence_items],
         }
+        if state.incident_bundle_snapshot is not None:
+            output["incident_bundle"] = deepcopy(state.incident_bundle_snapshot)
+            output["missing_evidence"] = list(state.missing_evidence)
+        return output
 
     return _run_node(
         session,
@@ -276,6 +300,12 @@ def retrieve_context(session: Session, agent_run: AgentRun, state: AgentState) -
     def handler(_: AgentStep) -> dict[str, Any]:
         if state.alert_summary is None:
             raise ValueError("Alert summary is required before context retrieval.")
+
+        if state.incident_bundle_snapshot is not None:
+            _append_missing_evidence(state, ["No runbook was supplied with this incident bundle; global fixture retrieval is disabled."])
+            return {"query": "", "results": [], "citations": [], "evidence_items": [],
+                    "suspicious_count": 0, "source_mode": "incident_bundle",
+                    "reason": "Investigation is isolated to the recorded imported observations."}
 
         classification = state.alert_classification
         query = " ".join(
@@ -515,6 +545,13 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
             elif result.tool_name == "retrieve_runbook" and output_payload.get("results"):
                 summary = str(output_payload["results"][0].get("content_excerpt") or summary)
 
+            imported = output_payload.get("observation") if result.tool_name == "read_incident_observation" else None
+            source_observed_at = imported.get("observed_at") if imported else None
+            if imported is not None:
+                evidence_id = f"{state.agent_run_id}:observation:{output_payload['observation_id']}"
+                target_description = f" for {imported['node']}" if imported.get("node") else "; no node was supplied"
+                summary = f"Imported {imported['kind']} observation from {imported['source']}{target_description}."
+
             state.evidence_items.append(
                 EvidenceItem(
                     agent_run_id=state.agent_run_id,
@@ -524,12 +561,15 @@ def execute_safe_tools(session: Session, agent_run: AgentRun, state: AgentState)
                     source_type="tool",
                     tool_call_id=result.tool_call_id,
                     content=deepcopy(output_payload),
-                    observed_at=tool_result.observed_at,
+                    observed_at=datetime.fromisoformat(source_observed_at.replace("Z", "+00:00")) if source_observed_at else tool_result.observed_at,
+                    timestamp_basis=("source_observation" if source_observed_at else "recorded") if imported else None,
                     summary=summary,
                     citation=f"tool://{result.tool_name}/{result.tool_call_id}",
                     trust_level=trust_level,
                     suspicious=trust_level != "trusted" or is_suspicious,
-                    source=result.tool_name,
+                    source=imported["source"] if imported else result.tool_name,
+                    bundle_id=output_payload["bundle_id"] if imported else None,
+                    observation_id=output_payload["observation_id"] if imported else None,
                     matched_patterns=list(scan_result["matched_patterns"]),
                     risk_level=str(scan_result["risk_level"]),
                 )
@@ -685,9 +725,9 @@ def generate_recommendation(
             recommendation.proposed_actions = [ProposedAction(action_type="review_evidence",
                 target=str(state.alert_id), supporting_evidence_ids=evidence_ids, rationale=text)
                 for text in recommendation.recommended_next_steps]
-            recommendation.proposed_actions.extend(ProposedAction(action_type=item.tool_name,
-                target=item.target, supporting_evidence_ids=evidence_ids, rationale=item.rationale,
-                risk_level="high", requires_approval=True) for item in state.blocked_tools)
+            # Blocked definitions describe application boundaries, not actions
+            # proposed by the provider. Retain them separately for review; never
+            # manufacture disruptive proposals from their presence in a plan.
 
         return {
             **state.final_recommendation.model_dump(mode="json"),

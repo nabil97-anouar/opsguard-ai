@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce Milestone 3 A-H with isolated file-backed SQLite and the real API.
+"""Reproduce watchdog and audit integrity cases A-H with isolated file-backed SQLite and the real API.
 
 Run: .venv/bin/python scripts/verify_watchdog_audit.py --output-dir /tmp/opsguard-m3
 No infrastructure commands, external providers, or existing database mutations.

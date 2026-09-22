@@ -81,7 +81,7 @@ export function WatchdogFindingsPanel({
             <p className="mt-3 text-sm text-slate-300">Blocking: {finding.blocking === undefined ? "unknown" : finding.blocking ? "yes" : "no"} · Review required: {finding.mandatory_review === undefined ? "unknown" : finding.mandatory_review ? "yes" : "no"}</p>
             <p className="mt-2 break-all text-xs text-slate-400">Finding {finding.finding_id ?? "historical"} · Affected actions: {finding.affected_action_ids?.join(", ") || "none identified"}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+              <div className="min-w-0 rounded-2xl border border-white/8 bg-black/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                   Remediation
                 </p>
@@ -90,7 +90,7 @@ export function WatchdogFindingsPanel({
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+              <div className="min-w-0 rounded-2xl border border-white/8 bg-black/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                   Evidence references
                 </p>
@@ -98,7 +98,7 @@ export function WatchdogFindingsPanel({
                   {finding.evidence_refs.length > 0 ? (
                     finding.evidence_refs.map((reference) => (
                       <span
-                        className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 font-mono text-xs text-slate-200"
+                        className="max-w-full break-all rounded-sm border border-white/10 bg-white/[0.05] px-3 py-1 font-mono text-xs text-slate-200"
                         key={reference}
                       >
                         {reference}

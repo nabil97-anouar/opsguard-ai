@@ -1,81 +1,70 @@
 # OpsGuard AI
 
-OpsGuard AI coordinates evidence retrieval, typed operational tools, safety-policy checks, and human-review handoffs for incident triage.
+Evidence-based incident triage with typed tools, safety-policy checks, and a recorded handoff to human review.
 
 ## Overview
 
-Incident triage requires assembling observations from alerts, logs, runbooks, and previous incidents while distinguishing facts from assumptions. OpsGuard records that investigation as a sequence of steps, with retrieved source references, tool results, uncertainty, and policy findings available for review.
+An alert rarely contains enough information to explain an incident. Operators need to assemble logs, metrics, workload details, and source timestamps, identify what is missing, and assess a proposed response before acting.
 
-A FastAPI service runs the investigation through a closed tool registry and a fixed reasoning workflow. Reasoning is provided by the credential-free deterministic provider by default, with an optional OpenAI provider using validated structured outputs. A Next.js cyber-operations dashboard presents the recorded activity. Deterministic security scenarios exercise individual controls and the agent workflow, and evaluation endpoints export the resulting indicators.
+OpsGuard turns that investigation into an inspectable record. Upload a log, CSV, JSONL, Markdown, text, or JSON export, review its automatically converted incident bundle, run a bounded reasoning workflow, inspect its evidence and policy findings, and export the investigation. The application preserves the observations used during each run, including their source identity and trust status.
+
+It serves two related engineering tasks: **AI-assisted infrastructure triage** and **security regression testing of the AI application's own controls**. It does not replace your monitoring system or operate your cluster. Grafana, Prometheus, Slurm, and other systems can supply observations through the documented bundle format; live connectors are not included.
+
+![Recorded incident evidence in the OpsGuard console](docs/assets/recorded-evidence.png)
+
+The screenshot shows a synthetic log export after local conversion and a deterministic investigation.
 
 ## Key Capabilities
 
-- Document ingestion, section-aware character chunking, and deterministic lexical retrieval over SQL data.
-- Run-scoped evidence snapshots with source, document, chunk, and tool-call identifiers, timestamps, trust labels, and screening findings.
-- Seven executable local tools for observations, runbook retrieval, incident lookup, and internal ticket drafting.
-- Persisted investigation steps, every tool invocation attempt (including denials), assessments, and typed watchdog findings.
-- Nine security regression scenarios covering retrieved content, tool output, unsafe actions, and review requirements.
-- Dashboard inspection and stored Markdown/JSON reports with explicit execution cohorts, versions, provenance, and metric denominators.
-- Typed reasoning-provider contracts with run-scoped evidence validation and backend-only OpenAI credentials.
+- Convert common text-based incident exports to JSON in the browser, with a review and download step before import.
+- Import alerts and log, metric, job, and network observations without connecting to live infrastructure. Missing event times and targets remain explicit gaps.
+- Investigate imported data in isolation from bundled scenario fixtures and the global document catalog.
+- Run deterministic reasoning offline, or select TU/institutional inference, OpenAI, Claude, or Ollama through backend configuration.
+- Preserve evidence identity, original observation time, content, trust, gaps, and provider provenance in each run.
+- Validate structured model output, restrict tool execution, and record watchdog findings before human review.
+- Export individual investigations and deterministic security evaluations as JSON or Markdown.
+- Explore traces, evidence, tool attempts, and regression results in a terminal-style dashboard.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    Dashboard[Next.js dashboard] --> API[FastAPI]
+    UI[Next.js console] --> API[FastAPI]
+    Bundle[Incident JSON bundle] --> Import[Validated untrusted intake]
+    Import --> SQL[(SQLite or PostgreSQL)]
+    API --> Import
     API --> Workflow[Fixed investigation workflow]
-    Workflow --> Provider[LLM provider interface]
-    Provider --> Deterministic[Deterministic provider]
-    Provider --> OpenAI[Optional OpenAI provider]
-    Workflow --> Retrieval[Lexical retrieval]
-    Workflow --> Tools[Typed local tool registry]
-    Tools --> Observations[Simulated infrastructure observations]
-    Tools --> Local[SQL incident lookup and ticket drafts]
-    Workflow --> Watchdog[Watchdog policy checks]
-    Watchdog --> Review[Terminal human-review handoff]
-
-    Ingestion[Document ingestion] --> SQL[(PostgreSQL or SQLite)]
-    Retrieval --> SQL
+    Workflow --> Provider[Typed reasoning interface]
+    Provider --> Local[Deterministic rules]
+    Provider --> Models[Optional TU / OpenAI / Claude / Ollama]
+    Workflow --> Tools[Closed typed tool registry]
+    Tools --> Saved[Imported observation snapshots]
+    Tools --> Fixtures[Bundled scenario fixtures]
+    Workflow --> RAG[Lexical retrieval for bundled scenarios]
+    RAG --> SQL
+    Workflow --> Policy[Watchdog checks]
+    Policy --> Review[Terminal human review]
     Workflow --> SQL
-    Local --> SQL
-
-    API --> Harness[Security regression harness]
-    Harness --> Workflow
-    Harness --> Components[Tool and policy component checks]
-    API --> Evaluation[Evaluation and report export]
-    Evaluation --> SQL
+    SQL --> Reports[Historical investigation exports]
+    API --> Harness[Deterministic security harness]
+    Harness --> Evaluation[Stored evaluation reports]
 ```
 
-The backend uses FastAPI, SQLModel, and Pydantic; the frontend uses Next.js, React, TypeScript, and Tailwind CSS. See the [architecture reference](docs/ARCHITECTURE.md), [agent execution flow](docs/AGENT_GRAPH.md), and [data model](docs/DATA_MODEL.md).
-
-## Reasoning Modes
-
-- **Deterministic provider:** reproducible local development, CI, security-harness execution, and offline evaluation. It requires no API key.
-- **OpenAI provider:** optional external reasoning through the Responses API and Pydantic-validated structured outputs. Provider output remains untrusted and cannot authorize tools, change evidence trust, alter watchdog rules, or bypass human review.
-
-Provider selection is backend configuration. The browser never accepts or receives an API key. See [Setup](docs/SETUP.md) for the opt-in configuration and manual bounded check.
+The fixed workflow makes four bounded reasoning calls when a model provider is selected. Models propose classifications, hypotheses, assessments, and recommendations; application code owns evidence, tool selection, policy, and persistence. Imported investigations read their own saved observations and do not retrieve scenario fixtures. See [Architecture](docs/ARCHITECTURE.md) and [Agent Workflow](docs/AGENT_GRAPH.md).
 
 ## Safety Model
 
-External context is data, not authority to change the workflow or tool registry. Documents and tool observations carry trust labels; retrieved chunks and tool outputs are screened for known injection indicators.
+Imported observations, retrieved documents, and model output are untrusted. Public intake cannot grant trusted authority. Lexical retrieval requires relevance, resolves conflicting trust restrictively, and excludes quarantined content.
 
-Public ingestion cannot assign trusted authority. Retrieval applies the most restrictive document, chunk, and metadata trust label, excludes quarantined content, and requires lexical relevance. Failed and blocked tool attempts remain audit records rather than supporting evidence. Historical views show only the evidence recorded during that run.
+The registry separates executable local adapters from destructive definitions that have no handlers. Invalid, denied, or failed calls cannot become supporting evidence. Typed output validation rejects malformed proposals and evidence references outside the run; watchdog policies inspect action intent, grounding identities, suspicious content, and review requirements.
 
-The closed registry validates tool inputs and outputs. Five destructive action definitions return blocked responses: canceling jobs, draining or isolating nodes, blocking users, and disabling services. Watchdog policies inspect typed action intent and parameters first, keeping evidence separate from proposals. They validate same-run references to valid observations and supplement those checks with normalized proposal-text and suspicious-content screening. Recommendations remain candidates until policy review; local tickets record pending-review or blocked lifecycle after that decision.
-
-Every successful investigation ends in a human-review state. This is a terminal handoff, not an approve/reject/resume execution mechanism. See the [safety boundaries and enforcement limits](docs/SECURITY_BOUNDARIES.md).
-
-## Evaluation
-
-The harness provides nine deterministic security regression checks: one full agent workflow, two component cases, five policy cases, and one tool-boundary case. Each result records its test level, explicit expectations, and mandatory-invariant outcomes. New executions use strict pass/fail; a destructive handler invocation forces failure.
-
-Evaluation selects one completed executed harness cohort and snapshots its scenario/provider/policy versions, related run IDs, result observations, and metrics. Every rate exposes numerator and denominator, with `null` for an unavailable rate. Reports cover application invariant preservation, structural evidence integrity, and terminal human review; they do not establish semantic correctness, calibrated confidence, or general prompt-injection resistance. There is no overall AI safety score.
-
-Seeding creates clearly labeled fixture history, which cannot satisfy an execution requirement. Evaluate the returned `harness_run_id` and retain the `evaluation_run_id` for matching JSON/Markdown exports. Stored reports do not change when unrelated agent activity occurs. See [scenario coverage](docs/SECURITY_HARNESS.md) and [metric formulas and limitations](docs/EVALUATION.md).
+A successful investigation ends at human review. No approve/reject/resume execution mechanism is implemented. Reports preserve historical observations rather than retrieving new context when an old run is opened. See [Security Boundaries](docs/SECURITY_BOUNDARIES.md).
 
 ## Quick Start
 
-Use Python 3.11 and Node 22. From the repository root:
+Use **Python 3.11** and **Node 22**. Commands below assume a checkout of this repository and start a local SQLite instance without model credentials.
+
+**1. Install and start the backend**, from the repository root:
 
 ```bash
 python3.11 -m venv .venv
@@ -83,47 +72,108 @@ source .venv/bin/activate
 python -m pip install --require-hashes -r backend/requirements-dev.txt
 export PYTHONPATH=backend
 export DATABASE_URL=sqlite:///./opsguard.db
-python -m app.db.init_db
+export LLM_PROVIDER=deterministic
+python -m app.db.init_db &&
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal, run `cd frontend`, `npm ci`, then `npm run dev`. Open `http://localhost:3000`. Use `bash scripts/demo_walkthrough.sh` from the root for the complete local reproduction.
+**2. Start the frontend** in another terminal, from the repository root:
 
-See [Setup](docs/SETUP.md) for configuration, Compose, readiness and dependency maintenance. The stack uses PostgreSQL, an explicit schema initializer, backend and frontend; no unused integration services run.
+```bash
+cd frontend
+node --version  # should report v22.x
+npm ci
+npm run dev
+```
+
+**3. Open [localhost:3000](http://localhost:3000)** on the same computer. Use this address rather than a LAN IP so the default browser-origin configuration matches. The Overview should show a connected backend and deterministic reasoning.
+
+**4. Open Investigations**, choose a supported file (or [normal-workload.json](examples/incidents/normal-workload.json)), review the conversion, then click **Import incident** and **Run imported investigation**. Inspect the saved evidence, review the findings, then download its Markdown or JSON report. No seeding or API key is needed for this path.
+
+For Compose, supported configuration, and troubleshooting, see [Setup](docs/SETUP.md). For a complete manual test checklist, see [Run and Test](docs/RUN_AND_TEST.md).
 
 ## Example Workflow
 
-1. Open the dashboard and run the GPU investigation.
-2. Inspect the recorded retrieval context and tool outputs alongside the hypotheses and assessment in the step trace.
-3. Review the recommendation, missing evidence, and watchdog findings. The run ends awaiting human review.
-4. Run the security harness, then generate an evaluation and open its Markdown or JSON report.
+Suppose a GPU alert reports sustained utilization. Export a small set of related observations from your monitoring and scheduler systems. OpsGuard converts supported files into an [incident bundle](docs/INCIDENT_BUNDLES.md) automatically; a canonical bundle can also retain typed metrics, jobs, and network records.
 
-Use a disposable local database for harness work. The [API walkthrough](docs/DEMO_SCRIPT.md) provides fixture identifiers, explicit requests, and reset caveats.
+1. Select the file and review the converted JSON. Import the alert with its observations. OpsGuard assigns bundle and observation identities and treats the content as untrusted.
+2. Start an investigation with the selected reasoning provider. With a remote provider, the bounded alert/evidence context is sent to that service.
+3. Inspect the hypotheses beside their evidence, missing information, tool attempts, and watchdog result. High utilization alone is not proof of abuse.
+4. Export the record and use it in your existing incident process. An operator decides what to do outside OpsGuard.
+
+Four [example bundles](examples/incidents) cover a normal workload, suspicious activity, insufficient evidence, and malicious instructions embedded in a log. They are synthetic inputs, not evidence of measured customer outcomes.
+
+## Model Providers
+
+Deterministic reasoning is the default. Select one backend provider and restart the backend to change it:
+
+| Provider | `LLM_PROVIDER` | Required settings |
+| --- | --- | --- |
+| Local rules | `deterministic` | None |
+| TU / compatible institutional endpoint | `institutional` | `INSTITUTIONAL_LLM_BASE_URL`, `INSTITUTIONAL_LLM_API_KEY`, `INSTITUTIONAL_LLM_MODEL` |
+| OpenAI Responses | `openai` | `OPENAI_API_KEY`, `OPENAI_MODEL` |
+| Claude | `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
+| Ollama | `ollama` | `OLLAMA_MODEL`; local endpoint configured by `OLLAMA_BASE_URL` |
+
+Keep credentials only in the backend environment or ignored root `.env`, never `.env.example` or `NEXT_PUBLIC_*`. A configured provider is not proof of a successful request. Provider errors fail explicitly; the system does not silently switch providers.
+
+See [Provider Setup](docs/PROVIDERS.md) for complete examples, institutional model identifiers, local Ollama setup, timeouts, and data-handling boundaries.
+
+## Evaluation
+
+The security harness runs nine **deterministic regression scenarios**: one full agent workflow, two component cases, five policy cases, and one tool-boundary case. Each records explicit expectations and mandatory-invariant outcomes. Fixture history is labeled separately and cannot count as an executed result.
+
+Evaluation snapshots one executed cohort with its versions, observations, numerator, and denominator for each metric. These checks establish specific application behaviors; confidence and coverage indicators do not establish semantic correctness, calibrated safety, or general prompt-injection resistance. The suite does not benchmark the live model providers.
+
+On a disposable local database, execute the Security harness workspace, then generate and export its Evaluation report. The command-line equivalent is:
+
+```bash
+bash scripts/demo_walkthrough.sh
+```
+
+The script checks that the backend uses deterministic reasoning **before** creating records. See [Security Harness](docs/SECURITY_HARNESS.md) and [Evaluation](docs/EVALUATION.md).
 
 ## API
 
-The service groups endpoints under `/api/v1` for health/setup, documents, retrieval, tools, agent runs, watchdog checks, harness results, and evaluation exports.
+Endpoints under `/api/v1` cover health, incident intake, investigation history and exports, documents/retrieval, tools, watchdog policies, the security harness, and evaluation.
 
-Use the running service's [OpenAPI schema](http://localhost:8000/openapi.json) as the API contract and the [API reference](docs/API_SPEC.md) for request examples. FastAPI also serves [Swagger UI](http://localhost:8000/docs); the current security headers can prevent its external assets from loading.
+Use the [OpenAPI schema](http://localhost:8000/openapi.json) and [API Reference](docs/API_SPEC.md). [Swagger UI](http://localhost:8000/docs) is also served; current response security headers may prevent its external assets from loading.
 
 ## Development
 
-[CONTRIBUTING.md](CONTRIBUTING.md) lists the same checks used by [CI](.github/workflows/ci.yml): backend pytest/Ruff/scoped mypy, frontend tests/lint/type checking/build, dependency audits, Markdown links and container builds. CI uses Python 3.11 and Node 22.
+From the repository root with the Python environment active:
 
-Report vulnerabilities using [SECURITY.md](SECURITY.md). A repository license has not yet been selected.
+```bash
+export LLM_PROVIDER=deterministic
+export DATABASE_URL=sqlite://
+python -m pytest backend/tests -q &&
+python -m ruff check backend scripts &&
+python -m mypy &&
+python scripts/check_secrets.py &&
+python scripts/check_markdown_links.py &&
+git diff --check
+```
+
+Then, from `frontend/`:
+
+```bash
+npm test && npm run lint && npm run typecheck && npm run build
+```
+
+Stop the development server before building into its `.next` directory. Tests simulate provider responses and do not require model keys. [CONTRIBUTING.md](CONTRIBUTING.md) describes CI, dependency maintenance, container checks, and the optional staged-file credential guard.
 
 ## Security and Limitations
 
-OpsGuard defaults to deterministic local reasoning for reproducible development and security regression testing. Optional OpenAI reasoning sends the bounded alert/evidence context to an external service; its output is structurally validated and remains subordinate to application controls. Infrastructure adapters return deterministic local observations and do not execute live Slurm, Docker, network, or system operations. The registry is an internal Python API, not an MCP server.
+The API has no authentication or tenant isolation. Keep it local; this is not a hosted SaaS deployment. Report security issues according to [SECURITY.md](SECURITY.md).
 
-Human review is currently a terminal workflow state; authenticated approval and post-approval execution are not implemented. The API has no authentication and is intended for local use. Compose binds published ports to loopback and runs no unused Qdrant service.
+Infrastructure adapters read imported observations or deterministic fixtures. They do not execute live Slurm, Docker, network, or system operations. The tool registry is an internal Python interface, not an MCP server. Human review remains a terminal workflow state.
 
-Trust labels do not authenticate sources, and valid evidence references do not establish semantic support for a claim. Audit persistence requires a working database; crashes may leave incomplete invocation checkpoints. Audit rows are not tamper-evident, and fixture resets require care. Pattern screening is limited, and assessment values are uncalibrated. Consult the [security boundaries](docs/SECURITY_BOUNDARIES.md), [retrieval reference](docs/RAG_DESIGN.md), and [evaluation limitations](docs/EVALUATION.md) before extending the system.
+Trust labels do not authenticate a source, and valid citation IDs do not prove that a claim follows from the evidence. Pattern screening is incomplete. Audit records are ordinary SQL data, not tamper-evident storage. Provider responses and self-assessed confidence require operator judgment. A local Ollama endpoint avoids a hosted model service only when the selected model itself executes locally; verify your model and endpoint configuration.
 
 ## Roadmap
 
-- Reviewed trust promotion, source authentication, and claim-level support checks.
-- Broader independently labeled evaluation cases and isolated benchmark environments.
-- Recovery of interrupted executions and broader database migration support.
-- Broader provider-output conformance cases and explicitly enabled external-provider evaluations.
-- Authenticated review workflows and bounded external integrations.
+- Read-only monitoring and scheduler connectors with explicit source and access boundaries.
+- Reviewed trust promotion and claim-level support checks.
+- Independently labeled provider evaluations with explicit data and cost controls.
+- Recovery for interrupted runs and broader database migrations.
+- Authenticated review workflows before multi-user deployment.

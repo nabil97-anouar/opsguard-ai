@@ -1,0 +1,20 @@
+{
+  "schema_version": "incident-bundle-v1",
+  "incident": {
+    "title": "GPU utilization during a scheduled training workload",
+    "description": "Sanitized example: an operator reviews utilization on a node running a scheduled training workload. Authorization still needs independent verification.",
+    "severity": "info",
+    "source": "sanitized-example",
+    "observed_at": "2026-09-22T08:00:00Z",
+    "infrastructure_type": "gpu_cluster",
+    "node": "gpu-node-14",
+    "job_id": "training-202",
+    "user": "example-researcher"
+  },
+  "observations": [
+    {"kind": "log", "source": "training-log-export", "observed_at": "2026-09-22T07:59:00Z", "node": "gpu-node-14", "message": "Training epoch 12 completed; checkpoint saved; no workload authorization decision is present in this export.", "severity": "info"},
+    {"kind": "metric", "source": "metrics-export", "observed_at": "2026-09-22T08:00:00Z", "node": "gpu-node-14", "name": "gpu_utilization", "value": 84.0, "unit": "%"},
+    {"kind": "job", "source": "scheduler-export", "observed_at": "2026-09-22T08:00:00Z", "node": "gpu-node-14", "job_id": "training-202", "user": "example-researcher", "command": "python train_model.py", "status": "running"},
+    {"kind": "network", "source": "connection-export", "observed_at": "2026-09-22T08:00:00Z", "node": "gpu-node-14", "remote_ip": "192.0.2.20", "remote_port": 443, "process": "training-worker"}
+  ]
+}

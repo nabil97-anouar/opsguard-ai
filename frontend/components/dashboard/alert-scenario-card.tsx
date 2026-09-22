@@ -10,6 +10,8 @@ type AlertScenarioCardProps = {
   onRunPromptScenario: () => Promise<void> | void;
   runningScenario: "gpu" | "prompt" | null;
   latestRunStatus: string | null;
+  disabled?: boolean;
+  providerLabel?: string | null;
 };
 
 const scenarioCards = [
@@ -17,7 +19,7 @@ const scenarioCards = [
     key: "gpu" as const,
     title: "GPU abuse investigation",
     description:
-      "Runs the deterministic agent workflow against the seeded xmrig / mining-pool alert.",
+      "Investigates a synthetic mining alert using the configured reasoning provider.",
     alertId: DEMO_ALERT_IDS.gpuAbuse,
     severity: "critical",
     source: "slurm-monitor",
@@ -39,7 +41,9 @@ export function AlertScenarioCard({
   onRunGpuScenario,
   onRunPromptScenario,
   runningScenario,
-  latestRunStatus
+  latestRunStatus,
+  disabled = false,
+  providerLabel = null
 }: AlertScenarioCardProps) {
   return (
     <Card className="border-white/8 bg-white/[0.03]">
@@ -50,15 +54,16 @@ export function AlertScenarioCard({
           </p>
           <CardTitle className="mt-3">Run a sample investigation</CardTitle>
           <CardDescription className="mt-3">
-            Each scenario combines runbook retrieval, typed local tools, and
-            watchdog checks. Completed investigations end at a manual review handoff.
+            Seed sample data explicitly before launching these synthetic scenarios.
+            Each uses retrieval, local adapters, and watchdog checks, ending at human review.
           </CardDescription>
         </div>
 
         {latestRunStatus ? <SafetyBadge value={latestRunStatus} /> : null}
       </div>
 
-      <div className="mt-8 grid gap-4">
+      {providerLabel ? <p className="external-disclosure mt-4">Scenario evidence is sent to {providerLabel}.</p> : null}
+      <div className="mt-5 grid gap-3">
         {scenarioCards.map((scenario) => {
           const isRunning = runningScenario === scenario.key;
           const runAction =
@@ -66,7 +71,7 @@ export function AlertScenarioCard({
 
           return (
             <div
-              className="rounded-2xl border border-white/8 bg-ink/60 p-5"
+              className="rounded-sm border border-white/8 bg-ink/60 p-4"
               key={scenario.key}
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -85,9 +90,7 @@ export function AlertScenarioCard({
                     </div>
                   </div>
 
-                  <p className="mt-4 font-mono text-xs text-slate-400">
-                    Alert ID: {scenario.alertId}
-                  </p>
+
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <SafetyBadge value={scenario.severity} />
                     <SafetyBadge value={scenario.source} />
@@ -96,7 +99,7 @@ export function AlertScenarioCard({
 
                 <Button
                   className="min-w-44 justify-center"
-                  disabled={runningScenario !== null}
+                  disabled={disabled || runningScenario !== null}
                   onClick={runAction}
                   variant={scenario.key === "gpu" ? "primary" : "secondary"}
                 >

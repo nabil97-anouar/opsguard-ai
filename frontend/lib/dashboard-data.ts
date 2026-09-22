@@ -91,3 +91,25 @@ export function toolRegistryGroups(tools: ToolListItem[]) {
     { key: "blocked", label: "Blocked action definitions", tools: tools.filter((tool) => !isExecutable(tool)) }
   ] as const;
 }
+
+export function investigationReportPath(format: "md" | "json", runId: string): string {
+  return `/agent/runs/${encodeURIComponent(runId)}/report.${format}`;
+}
+
+/** Imported observations are recorded tool evidence, never manufactured RAG chunks. */
+export function recordedImportedEvidence(run: AgentRunDetailResponse | null): Array<EvidenceItem & { bundle_id: string; observation_id: string; tool_call_id: string }> {
+  const evidence = run?.final_recommendation?.evidence;
+  if (!Array.isArray(evidence)) return [];
+  return evidence.filter((item): item is EvidenceItem & { bundle_id: string; observation_id: string; tool_call_id: string } =>
+    item.kind === "tool_output" && item.source_type === "tool" &&
+    typeof item.bundle_id === "string" && typeof item.observation_id === "string" &&
+    typeof item.evidence_id === "string" && typeof item.tool_call_id === "string" &&
+    typeof item.source === "string" && typeof item.observed_at === "string" &&
+    typeof item.summary === "string" && typeof item.citation === "string" &&
+    isRecord(item.content) && ["trusted", "untrusted", "quarantined"].some((trust) => trust === item.trust_level));
+}
+
+export function recordedIncidentTitle(run: AgentRunDetailResponse): string | null {
+  const alert = run.steps.find((step) => step.node_name === "ingest_alert")?.output_snapshot.alert;
+  return isRecord(alert) && typeof alert.title === "string" ? alert.title : null;
+}

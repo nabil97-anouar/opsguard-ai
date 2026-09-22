@@ -13,6 +13,7 @@ Results retain legacy `status` values `executed`, `blocked`, or `failed` for exi
 | Tool | Implementation | Input | Output trust |
 | --- | --- | --- | --- |
 | `search_logs` | Lexical search over fixed local log entries | `query`, optional `limit` | `untrusted` |
+| `read_incident_observation` | One observation from the run's saved imported bundle; never fixtures | `observation_id` | `untrusted` |
 | `get_node_metrics` | Fixed metrics for a known fixture node | `node` | `untrusted` |
 | `get_running_jobs` | Fixed jobs, optionally filtered | Optional `node`, `user` | `untrusted` |
 | `check_network_connections` | Fixed outbound connection records | `node`, optional `limit` | `untrusted` |
@@ -27,7 +28,7 @@ All five destructive definitions have `handler=None` and `executable=false`. The
 
 ## REST usage
 
-`GET /api/v1/tools` lists definitions, including JSON schemas, usage metadata, and the explicit `executable` capability. The dashboard separates seven executable adapters from five blocked definitions.
+`GET /api/v1/tools` lists definitions, including JSON schemas, usage metadata, and the explicit `executable` capability. The dashboard separates eight executable adapters from five blocked definitions.
 
 For `POST /api/v1/tools/search_logs/execute`:
 
@@ -66,3 +67,7 @@ The agent scans tool outputs and surfaces untrusted or suspicious results in its
 - Historical runs created before evidence snapshots were introduced may lack unique invocation references; their missing evidence is not reconstructed from current tools or documents.
 
 Adding a real adapter requires explicit authorization and failure-handling design in addition to a typed schema. Existing local adapters do not provide production integration behavior.
+
+## Imported investigations
+
+The `incident_investigation` execution kind binds tool access to the saved ingest-step bundle. Its planner calls `read_incident_observation` once per imported observation (at most 32), with exact tool-call and original observation identities. The dispatcher also rejects fixture observations and global source lookup in this context, so changing an alert later or reusing a fixture hostname does not enable fallback. Reads use the run snapshot, not current alert content. Missing observations remain gaps. See [Incident Bundles](INCIDENT_BUNDLES.md).

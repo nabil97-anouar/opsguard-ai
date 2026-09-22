@@ -16,7 +16,3 @@ class IDSchema(SchemaModel):
 
 class CreatedAtSchema(SchemaModel):
     created_at: datetime
-
-
-class UpdatedAtSchema(CreatedAtSchema):
-    updated_at: datetime

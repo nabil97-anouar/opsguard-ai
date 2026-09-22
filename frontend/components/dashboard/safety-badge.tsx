@@ -18,7 +18,7 @@ export function SafetyBadge({ value, className }: SafetyBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em]",
+        "inline-flex max-w-full break-words items-center rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em]",
         tone,
         className
       )}

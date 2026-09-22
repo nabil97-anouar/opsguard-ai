@@ -26,9 +26,22 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-    llm_provider: Literal["deterministic", "openai"] = "deterministic"
+    llm_provider: Literal["deterministic", "openai", "institutional", "anthropic", "ollama"] = "deterministic"
     openai_api_key: SecretStr | None = None
     openai_model: str | None = None
+    institutional_llm_base_url: str | None = None
+    institutional_llm_api_key: SecretStr | None = None
+    institutional_llm_model: str | None = None
+    institutional_llm_response_format: Literal["json_object", "json_schema"] = "json_object"
+    institutional_llm_timeout_seconds: float | None = Field(default=None, ge=1, le=120)
+    anthropic_api_key: SecretStr | None = None
+    anthropic_model: str | None = None
+    anthropic_base_url: str = "https://api.anthropic.com"
+    anthropic_timeout_seconds: float | None = Field(default=None, ge=1, le=120)
+    ollama_model: str | None = None
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_api_key: SecretStr | None = None
+    ollama_timeout_seconds: float | None = Field(default=None, ge=1, le=120)
     llm_timeout_seconds: float = Field(default=30.0, ge=1, le=120)
     llm_max_output_tokens: int = Field(default=1800, ge=256, le=8000)
 
@@ -41,6 +54,52 @@ class Settings(BaseSettings):
             "http://127.0.0.1:3000",
         ]
     )
+
+    @field_validator("institutional_llm_base_url", "anthropic_base_url", "ollama_base_url")
+    @classmethod
+    def validate_provider_base_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(value)
+        # Accessing port validates malformed or out-of-range port strings too.
+        port = parsed.port
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                or parsed.username or parsed.password or parsed.query or parsed.fragment
+                or "\\" in value or port == 0 or any(character.isspace() for character in value)):
+            raise ValueError("Provider base URL must be an http(s) URL without credentials, query or fragment")
+        if parsed.scheme != "https" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            raise ValueError("Provider base URL requires HTTPS except for loopback testing")
+        # Keep the operator's path. API-compatible deployments do not all use /v1.
+        return value
+
+    @field_validator("anthropic_base_url", "ollama_base_url")
+    @classmethod
+    def require_native_base_url(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("Provider base URL cannot be empty")
+        return value
+
+    @field_validator("anthropic_model", "ollama_model")
+    @classmethod
+    def validate_native_model(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if value != value.strip() or len(value) > 200 or any(ord(character) < 32 for character in value):
+            raise ValueError("Chat model must be a nonempty deployment identifier")
+        return value
+
+    @field_validator("institutional_llm_model")
+    @classmethod
+    def validate_institutional_model(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if value != value.strip() or len(value) > 200 or any(ord(character) < 32 for character in value):
+            raise ValueError("Institutional chat model must be a nonempty deployment identifier")
+        if value == "gte-Qwen2-1.5B-instruct":
+            raise ValueError("gte-Qwen2-1.5B-instruct is an embedding deployment, not a chat model")
+        return value
 
     @field_validator("backend_cors_origins", mode="before")
     @classmethod

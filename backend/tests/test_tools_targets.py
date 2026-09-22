@@ -55,7 +55,7 @@ def test_tool_list_separates_executable_adapters_and_blocked_definitions(seeded_
     items = response.json()["items"]
     assert {item["name"] for item in items if item["executable"]} == {
         "search_logs", "get_node_metrics", "get_running_jobs", "check_network_connections",
-        "query_past_incidents", "retrieve_runbook", "create_ticket_draft",
+        "query_past_incidents", "retrieve_runbook", "create_ticket_draft", "read_incident_observation",
     }
     assert {item["name"] for item in items if not item["executable"]} == {
         "cancel_job", "drain_node", "block_user", "isolate_node", "disable_service",

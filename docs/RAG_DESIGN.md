@@ -72,3 +72,7 @@ The runtime `evidence_grounding_score` is the fraction of evidence items labeled
 [Document and DocumentChunk](../backend/app/models/document.py) are SQL tables. Retrieval does not use embeddings, Qdrant, BM25, reciprocal-rank fusion, or a reranker. Compose does not start Qdrant because this pipeline does not use it.
 
 See [Agent Workflow](AGENT_GRAPH.md), [Tool Registry](TOOL_REGISTRY.md), and [API Reference](API_SPEC.md).
+
+## Imported incident isolation
+
+Imported incident investigations currently skip global document retrieval and consume only their bound observation bundle. This avoids adding scenario fixtures or unrelated catalog entries to an imported case. The lexical retrieval API and bundled scenario path remain available independently. Adding selected runbooks to an imported investigation requires a future explicit evidence-selection contract; it is not inferred from source names. See [Incident Bundles](INCIDENT_BUNDLES.md).

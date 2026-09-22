@@ -14,6 +14,7 @@ from app.agent.providers.base import (
     ProviderRecommendation,
     validate_evidence_references,
 )
+from app.agent import imported_reasoning
 
 DETERMINISTIC_IMPLEMENTATION_VERSION = "deterministic-v3"
 
@@ -26,25 +27,28 @@ class DeterministicProvider(LLMProvider):
             model="local-rules-v3",
             mode="local",
             implementation_version=DETERMINISTIC_IMPLEMENTATION_VERSION,
+            connectivity="local",
         )
 
     def classify(self, context: ProviderContext) -> ProviderCallResult[ProviderClassification]:
         started = perf_counter()
-        value = ProviderClassification.model_validate(deterministic_rules.classify_alert(context.alert))
+        value = ProviderClassification.model_validate(imported_reasoning.classify(context) if imported_reasoning.is_imported(context)
+                                                       else deterministic_rules.classify_alert(context.alert))
         return ProviderCallResult(value=value, duration_ms=_elapsed(started))
 
     def hypothesize(self, context: ProviderContext) -> ProviderCallResult[ProviderHypotheses]:
         started = perf_counter()
         alert = {**context.alert, "classification": context.classification}
-        raw = deterministic_rules.generate_hypotheses(alert, _legacy_evidence(context))
-        value = ProviderHypotheses.model_validate({"hypotheses": raw})
+        raw = imported_reasoning.hypothesize(context) if imported_reasoning.is_imported(context) else {
+            "hypotheses": deterministic_rules.generate_hypotheses(alert, _legacy_evidence(context))}
+        value = ProviderHypotheses.model_validate(raw)
         validate_evidence_references(context, hypotheses=value.hypotheses)
         return ProviderCallResult(value=value, duration_ms=_elapsed(started))
 
     def assess(self, context: ProviderContext) -> ProviderCallResult[ProviderAssessment]:
         started = perf_counter()
         alert = {**context.alert, "classification": context.classification}
-        raw = deterministic_rules.assess_confidence(
+        raw = imported_reasoning.assess(context) if imported_reasoning.is_imported(context) else deterministic_rules.assess_confidence(
             alert,
             _legacy_evidence(context),
             context.suspicious_observations,
@@ -55,6 +59,9 @@ class DeterministicProvider(LLMProvider):
 
     def recommend(self, context: ProviderContext) -> ProviderCallResult[ProviderRecommendation]:
         started = perf_counter()
+        if imported_reasoning.is_imported(context):
+            return ProviderCallResult(value=ProviderRecommendation.model_validate(imported_reasoning.recommend(context)),
+                                      duration_ms=_elapsed(started))
         legacy_state = {
             "alert_summary": context.alert,
             "alert_classification": context.classification,

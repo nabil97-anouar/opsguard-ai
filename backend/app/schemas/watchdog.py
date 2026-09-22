@@ -4,7 +4,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from app.schemas.common import SchemaModel
-from app.watchdog.schemas import WatchdogDecision, WatchdogFinding
+from app.watchdog.schemas import WatchdogDecision
 
 
 from app.watchdog.schemas import WatchdogInput
@@ -25,8 +25,4 @@ class WatchdogPoliciesResponse(SchemaModel):
 
 
 class WatchdogEvaluateResponse(WatchdogDecision):
-    pass
-
-
-class WatchdogFindingResponse(WatchdogFinding):
     pass

@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .env.local
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.pyc
@@ -9,14 +11,28 @@ __pycache__/
 .coverage
 htmlcov/
 .next/
+.next-review/
 node_modules/
 dist/
 coverage/
 *.log
 frontend/tsconfig.tsbuildinfo
 backend/*.db
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
 
 .ruff_cache/
 *.db-wal
 *.db-shm
+*.db-journal
 audit-results/
+artifacts/
+# Local incident conversions and reports may contain operational data.
+*.incident.json
+opsguard-incident-*.json
+opsguard-incident-*.md
+# Local third-party review notes; maintained project documentation lives in docs/.
+Claude outputs/

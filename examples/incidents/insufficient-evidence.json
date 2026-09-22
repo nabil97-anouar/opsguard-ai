@@ -1,0 +1,11 @@
+{
+  "schema_version": "incident-bundle-v1",
+  "incident": {
+    "title": "Performance degradation without operational observations",
+    "description": "Sanitized example: only an alert is available. The affected target, logs, metrics and workload identity are unknown.",
+    "severity": "warning",
+    "source": "sanitized-example",
+    "observed_at": "2026-09-22T10:00:00Z"
+  },
+  "observations": []
+}

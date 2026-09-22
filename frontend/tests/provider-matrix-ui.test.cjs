@@ -31,7 +31,7 @@ test("runtime card renders deterministic, OpenAI, and unavailable provider state
     implementation_version: "openai-responses-v1", schema_version: "reasoning-v1",
     configured: true, available: true, reason: null, openai_api_key: "sk-never-render"
   }});
-  assert.match(openai, />Openai</);
+  assert.match(openai, />OpenAI</);
   assert.match(openai, /gpt-test/);
   assert.doesNotMatch(openai, /sk-never-render/);
 

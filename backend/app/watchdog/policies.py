@@ -96,14 +96,20 @@ def _severity_sort_value(severity: PolicySeverity) -> int:
 
 
 def _proposal_fragments(payload: WatchdogInput) -> list[str]:
-    """Only proposal fields: observations/hypotheses never establish action intent."""
+    """Only proposal fields establish intent, never denied-action definitions.
+
+    ``blocked_tools`` and the legacy recommendation field
+    ``blocked_actions_requiring_human_approval`` carry prohibited/conditional
+    definitions, not requested tool invocations. Actual structured actions,
+    narrative recommendations, and planned requests are checked independently,
+    even if they also appear in those contextual fields.
+    """
     recommendation = payload.final_recommendation or {}
     summary = str(recommendation.get("summary", ""))
     values = [*recommendation.get("recommended_next_steps", [])]
     if _intent_bearing(summary):
         values.append(summary)
-    values.extend(_normalized_json(action) for action in recommendation.get("blocked_actions_requiring_human_approval", []))
-    values.extend(_normalized_json(item) for item in payload.blocked_tools + payload.planned_tools)
+    values.extend(_normalized_json(item) for item in payload.planned_tools)
     return [normalize_intent(str(value)) for value in values]
 
 
@@ -111,7 +117,9 @@ def _intent_bearing(text: str) -> bool:
     normalized = normalize_intent(text)
     # Deterministic fallback for proposal language. Observation summaries such as
     # "logs mention DELETE" remain observations; this is not semantic analysis.
-    return bool(re.search(r"\b(?:execute|recommend|perform|run|should|must)\b", normalized)) or any(
+    return bool(re.search(r"\b(?:execute|recommend|perform|run|should|must)\b", normalized)) or bool(
+        re.match(r"^(?:drain|cancel|block|isolate|disable|delete|kill|revoke|shutdown|quarantine)\b", normalized)
+    ) or any(
         normalized.startswith(normalize_intent(phrase)) for phrase, _ in DANGEROUS_ACTION_PATTERNS
     )
 

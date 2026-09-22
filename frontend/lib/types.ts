@@ -1,5 +1,5 @@
 export type BackendErrorPayload = {
-  detail?: string;
+  detail?: string | Array<{ loc?: Array<string | number>; type?: string; msg?: string }>;
 };
 
 export type HealthPayload = {
@@ -37,24 +37,6 @@ export type DocumentListItem = {
   created_at: string;
 };
 
-export type DocumentIngestRequest = {
-  title: string;
-  source: string;
-  doc_type: string;
-  trust_level?: Exclude<TrustLevel, "trusted">;
-  content: string;
-  metadata?: Record<string, unknown> | null;
-};
-
-export type DocumentIngestResponse = {
-  status: "ok";
-  document_id: string;
-  created: boolean;
-  updated: boolean;
-  skipped: boolean;
-  chunk_count: number;
-};
-
 export type RetrievalChunk = {
   evidence_id?: string;
   observed_at?: string;
@@ -71,19 +53,6 @@ export type RetrievalChunk = {
   matched_patterns: string[];
   risk_level: string;
   citation: string;
-};
-
-export type RagRetrieveRequest = {
-  query: string;
-  limit?: number;
-  trust_filter?: TrustLevel | null;
-  include_untrusted?: boolean;
-};
-
-export type RagRetrieveResponse = {
-  status: "ok";
-  query: string;
-  results: RetrievalChunk[];
 };
 
 export type ToolListItem = {
@@ -153,6 +122,8 @@ export type WatchdogFinding = {
 
 export type EvidenceItem = {
   evidence_id: string;
+  bundle_id?: string | null;
+  observation_id?: string | null;
   kind: "alert" | "retrieval" | "tool_output";
   source_type: "alert" | "document" | "tool";
   source: string;
@@ -164,6 +135,7 @@ export type EvidenceItem = {
   trust_level: TrustLevel;
   content: string | Record<string, unknown>;
   observed_at: string;
+  timestamp_basis?: "source_observation" | "recorded" | null;
   summary: string;
   citation: string;
   suspicious: boolean;
@@ -457,7 +429,10 @@ export type ToolAttempt = {
 };
 
 export type ReasoningRuntime = {
-  provider: "deterministic" | "openai";
+  connectivity?: "local" | "not_checked" | "not_configured";
+  response_format?: "json_schema" | "json_object" | null;
+  model_options?: Array<{ id: string; capability: "chat"; verified: boolean }>;
+  provider: "deterministic" | "openai" | "institutional" | "anthropic" | "ollama";
   model: string;
   mode: "local" | "external";
   implementation_version: string;
@@ -466,3 +441,38 @@ export type ReasoningRuntime = {
   available: boolean;
   reason: string | null;
 };
+
+export type IncidentObservation = {
+  kind: "log" | "metric" | "job" | "network";
+  source: string;
+  observed_at?: string | null;
+  node?: string | null;
+  [field: string]: unknown;
+};
+
+export type IncidentBundle = {
+  schema_version: "incident-bundle-v1";
+  incident: {
+    title: string;
+    description: string;
+    severity: "info" | "warning" | "high" | "critical";
+    source: string;
+    observed_at?: string | null;
+    infrastructure_type?: string;
+    node?: string | null;
+    job_id?: string;
+    user?: string;
+  };
+  observations: IncidentObservation[];
+};
+
+export type IncidentImportResponse = {
+  status: "imported";
+  bundle_id: string;
+  alert_id: string;
+  observation_count: number;
+  trust_level: "untrusted";
+  imported_at: string;
+};
+
+export type ImportedIncident = { bundle: IncidentBundle; receipt: IncidentImportResponse };

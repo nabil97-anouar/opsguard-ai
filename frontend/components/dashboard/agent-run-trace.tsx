@@ -227,6 +227,8 @@ export function AgentRunTrace({
                     {typeof step.output_snapshot.provider_call === "object" ? (
                       <p className="mt-2 font-mono text-xs text-accentSoft">
                         Provider stage · {agentRun.llm_provider} · {String((step.output_snapshot.provider_call as Record<string, unknown>).duration_ms ?? 0)} ms
+                        {(step.output_snapshot.provider_call as Record<string, unknown>).requested_model ? <> · Requested: {String((step.output_snapshot.provider_call as Record<string, unknown>).requested_model)}</> : null}
+                        {(step.output_snapshot.provider_call as Record<string, unknown>).served_model ? <> · Service reported: {String((step.output_snapshot.provider_call as Record<string, unknown>).served_model)}</> : null}
                       </p>
                     ) : null}
                   </div>

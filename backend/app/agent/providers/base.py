@@ -118,16 +118,27 @@ class ProviderContext(BaseModel):
         return {item.evidence_id for item in self.untrusted_evidence}
 
 
+class ProviderModelOption(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str
+    capability: Literal["chat"] = "chat"
+    verified: bool = False
+
+
 class ProviderIdentity(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    provider: Literal["deterministic", "openai"]
+    provider: Literal["deterministic", "openai", "institutional", "anthropic", "ollama"]
     model: str
     mode: Literal["local", "external"]
     implementation_version: str
     schema_version: str = REASONING_SCHEMA_VERSION
     configured: bool = True
     available: bool = True
+    connectivity: Literal["local", "not_checked", "not_configured"] = "not_checked"
+    response_format: Literal["json_object", "json_schema"] | None = None
+    model_options: list[ProviderModelOption] = Field(default_factory=list)
     reason: str | None = None
 
 
@@ -141,6 +152,8 @@ class ProviderCallResult(Generic[T]):
     request_id: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    requested_model: str | None = None
+    served_model: str | None = None
 
     @property
     def total_tokens(self) -> int | None:

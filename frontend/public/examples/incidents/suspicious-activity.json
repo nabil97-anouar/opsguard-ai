@@ -1,0 +1,16 @@
+{
+  "schema_version": "incident-bundle-v1",
+  "incident": {
+    "title": "Unrecognized workload with sustained GPU utilization",
+    "description": "Sanitized example: a process name and destination need review. These observations do not establish compromise or prove the workload is unauthorized.",
+    "severity": "high",
+    "source": "sanitized-example",
+    "observed_at": "2026-09-22T09:00:00Z",
+    "node": "compute-example-02"
+  },
+  "observations": [
+    {"kind": "log", "source": "process-log-export", "observed_at": "2026-09-22T08:59:00Z", "node": "compute-example-02", "message": "Process xmrig-example was observed. Workload owner was absent from this export.", "severity": "warning"},
+    {"kind": "metric", "source": "metrics-export", "observed_at": "2026-09-22T09:00:00Z", "node": "compute-example-02", "name": "gpu_utilization", "value": 98.0, "unit": "%"},
+    {"kind": "network", "source": "connection-export", "observed_at": "2026-09-22T09:00:00Z", "node": "compute-example-02", "remote_ip": "198.51.100.42", "remote_port": 3333, "process": "xmrig-example"}
+  ]
+}

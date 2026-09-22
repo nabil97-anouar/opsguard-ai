@@ -1,6 +1,6 @@
 # Architecture
 
-OpsGuard combines incident investigation, local document retrieval, typed tool execution, policy checks, and evaluation reporting in one application. Reasoning is provided through a typed deterministic/OpenAI boundary; infrastructure responses remain deterministic local fixtures.
+OpsGuard combines incident investigation, local document retrieval, typed tool execution, policy checks, and evaluation reporting in one application. Reasoning is provided through a typed deterministic/OpenAI/institutional/Claude/Ollama boundary. Infrastructure observations come from imported incident snapshots or explicitly bundled scenario fixtures; there is no live cluster connector.
 
 ## Components and data flow
 
@@ -13,6 +13,12 @@ flowchart TD
     Runner --> Provider[LLM provider interface]
     Provider --> Rules[Deterministic provider]
     Provider --> OpenAI[Optional OpenAI provider]
+    Provider --> Institutional[Institutional Chat Completions]
+    Provider --> Claude[Claude Messages]
+    Provider --> Ollama[Ollama chat]
+    API --> Bundle[Validated incident bundle intake]
+    Bundle --> SQL
+    Tools --> Imported[Imported observation snapshots]
     Runner --> RAG[Lexical retrieval]
     RAG --> SQL
     Runner --> Tools[Typed tool registry]
@@ -41,7 +47,7 @@ The provider proposes classification, hypotheses, assessment, recommendations, a
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind; [dashboard-shell.tsx](../frontend/components/dashboard/dashboard-shell.tsx) coordinates requests and React state |
 | API | FastAPI routers and Pydantic request/response schemas registered in [main.py](../backend/app/main.py) |
 | Agent | Fixed ten-node workflow in [runner.py](../backend/app/agent/runner.py) and [nodes.py](../backend/app/agent/nodes.py) |
-| Reasoning | Typed interface, context builder, deterministic rules, and optional OpenAI Responses adapter in [providers](../backend/app/agent/providers) |
+| Reasoning | Typed interface, context builder, deterministic rules, and optional OpenAI Responses, institutional Chat Completions, Claude Messages, and Ollama chat adapters in [providers](../backend/app/agent/providers) |
 | Retrieval | SQL document ingestion, character chunking, and lexical ranking in [app/rag](../backend/app/rag) |
 | Tools | Immutable typed registry, local handlers, and run-linked audit records in [app/tools](../backend/app/tools) |
 | Watchdog | Eight deterministic policies and decision aggregation in [app/watchdog](../backend/app/watchdog) |
@@ -51,17 +57,17 @@ The provider proposes classification, hypotheses, assessment, recommendations, a
 
 ## An investigation
 
-1. Fixture seeding creates alerts and reference data. `POST /api/v1/agent/runs` starts an investigation for an existing alert ID.
-2. The runner records the alert, classifies it, retrieves document excerpts, and selects tools from a fixed incident-category plan.
-3. Local tools return infrastructure fixtures, search stored incidents/runbooks, or persist a ticket draft. Destructive tool definitions return blocked results.
+1. The browser converts supported text exports locally into a reviewable JSON bundle. Incident import stores its untrusted alert and bounded observations, retaining unknown event times and targets as gaps. Explicit fixture seeding separately creates example alerts and reference data. `POST /api/v1/agent/runs` starts an investigation for an existing alert ID.
+2. The runner snapshots the alert and classifies it. Imported investigations use only the bound bundle observations; bundled scenarios use lexical retrieval and a fixed incident-category tool plan.
+3. The imported-observation adapter reads one saved observation per audited call. Fixture tools and global document/history lookup are denied in imported runs. Scenario tools can return infrastructure fixtures or search stored incidents/runbooks; ticket drafting persists a local artifact. Destructive tool definitions return blocked results.
 4. The configured provider assembles typed hypotheses, an assessment, and a candidate recommendation. The application rejects malformed output and unknown/cross-run evidence references.
 5. The watchdog evaluates the candidate, persists its typed verdict, and marks it pending review or blocked before creating a correspondingly labeled local ticket. The runner ends in `waiting_for_human` with approval `pending`.
 
-This work occurs synchronously in the API request. OpenAI mode makes four bounded provider calls during a run; deterministic mode makes none. Steps, assessments, calls, and findings are committed incrementally. There is no task queue, adaptive agent loop, direct model tool calling, or approval-resume implementation. See [Agent Workflow](AGENT_GRAPH.md) for the exact node sequence and error behavior.
+This work occurs synchronously in the API request. External reasoning makes four bounded provider calls during a run; deterministic mode makes none. Steps, assessments, calls, and findings are committed incrementally. There is no task queue, adaptive agent loop, direct model tool calling, or approval-resume implementation. See [Agent Workflow](AGENT_GRAPH.md) for the exact node sequence and error behavior.
 
 ## Frontend/backend contract
 
-The frontend has a landing route and `/dashboard`. It displays run traces, tool results, retrieved context, watchdog findings, harness results, and evaluation summaries. Alert overview cards describe fixed fixture scenarios; there is no live alert-list API.
+The frontend has a landing route and `/dashboard`. It displays run traces, tool results, retrieved context, watchdog findings, harness results, and evaluation summaries. The Investigations workspace accepts incident bundles and starts their runs separately. Sample cards describe explicit fixture scenarios. Per-investigation exports render persisted records; there is no live alert-list or monitoring connector.
 
 [api.ts](../frontend/lib/api.ts) is a handwritten fetch client. [types.ts](../frontend/lib/types.ts) contains corresponding TypeScript types; these are not generated from OpenAPI and do not validate received JSON at runtime. The browser uses [API_BASE_URL](../frontend/lib/config.ts), which defaults to `http://localhost:8000/api/v1`. This public URL is embedded at build time. Compose passes it as a build argument; changing container runtime variables cannot reconfigure the browser bundle.
 

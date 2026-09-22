@@ -69,8 +69,12 @@ class EvidenceItem(BaseModel):
     chunk_id: UUID | None = None
     tool_call_id: UUID | None = None
     retrieval_score: float | None = Field(default=None, ge=0)
+    bundle_id: UUID | None = None
+    observation_id: UUID | None = None
     content: str | dict[str, Any]
     observed_at: datetime
+    # Legacy evidence has no recorded basis; do not infer an event time for it.
+    timestamp_basis: Literal["source_observation", "recorded"] | None = None
     summary: str
     citation: str
     trust_level: TrustLevel
@@ -162,6 +166,7 @@ class AgentState(BaseModel):
     alert_id: UUID
     agent_run_id: UUID
     alert_summary: AlertSummary | None = None
+    incident_bundle_snapshot: dict[str, Any] | None = None
     alert_classification: dict[str, Any] = Field(default_factory=dict)
     retrieved_context: list[RetrievedContextItem] = Field(default_factory=list)
     tool_results: list[ToolResultItem] = Field(default_factory=list)
